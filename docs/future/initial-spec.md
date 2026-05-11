@@ -32,9 +32,9 @@ As a `df` add-on, `dfw` uses companion `github.com/michaelquigley/df` packages f
 
 Explicit non-goals, by design:
 
-- **Native menu bar API.** webview/webview_go's menu support is thin; building proper native menus per platform would push the design toward Wails.
+- **Native menu bar API.** The selected webview binding's menu support is thin; building proper native menus per platform would push the design toward Wails.
 - **Native file dialogs.** Same reasoning. Products call platform-specific libraries directly when needed.
-- **Multi-window in a single process.** Native event loops are single-threaded on every OS; webview/webview_go reflects this. Multiple windows are achieved via multiple `Window` processes.
+- **Multi-window in a single process.** Native event loops are single-threaded on every OS; the selected webview binding reflects this. Multiple windows are achieved via multiple `Window` processes.
 - **JS↔Go bridge.** The contract is the product's HTTP API.
 - **HTTP forwarding or proxy between processes.** Windows' webviews connect directly to the daemon's HTTP server.
 - **Single-instance enforcement.** Products implement this themselves if they need it.
@@ -254,7 +254,7 @@ func DevToolsEnabled() bool
 
 ### Window state
 
-Window state persistence (size, position) is **deferred** in v1. `webview/webview_go` exposes `SetSize` but no portable getter for current size or position; capturing user-resized dimensions would require platform-specific GTK/Win32 plumbing via the native `Window()` handle. That work isn't justified by the value of relaunch-time size restoration at this stage.
+Window state persistence (size, position) is **deferred** in v1. The selected webview binding exposes `SetSize` but no portable getter for current size or position; capturing user-resized dimensions would require platform-specific GTK/Win32 plumbing via the native `Window()` handle. That work isn't justified by the value of relaunch-time size restoration at this stage.
 
 For v1, every `Run` and `Window` invocation opens its window at `InitialSize`. Products that need persistent layout coordinate it themselves (e.g. by persisting state in their HTTP API and replaying it after the page loads).
 
@@ -277,7 +277,7 @@ dfw/
 ├── spawn.go                    # Spawn, SpawnSelf helpers
 ├── discovery.go                # Runtime file read/write, env var resolution
 ├── devtools.go                 # DevToolsEnabled and friends
-├── webview.go                  # webview/webview_go wrapper
+├── webview.go                  # selected webview binding wrapper
 ├── tray.go                     # fyne.io/systray wrapper
 ├── icon.go                     # Cross-platform icon helpers
 ├── icon_darwin.go              # macOS-specific
@@ -391,7 +391,7 @@ Dependencies and their licenses:
 | Dependency           | License      | Linkage                           |
 |----------------------|--------------|-----------------------------------|
 | github.com/michaelquigley/df | MIT | Static (Go module)                |
-| webview/webview_go   | MIT          | Static (Go module)                |
+| centrifuge.hectabit.org/HectaBit/webview_go | MIT | Static (Go module) |
 | fyne.io/systray      | Apache-2.0   | Static (Go module)                |
 | WebKitGTK (Linux)    | LGPL 2.1+    | Dynamic via system shared library |
 | WebView2 (Windows)   | Microsoft    | Dynamic via system runtime        |
@@ -413,7 +413,7 @@ Items explicitly out of scope for v1, captured for future consideration:
 - **Native file dialog API**: same reasoning
 - **CLI ↔ daemon HTTP forwarding**: `dfw` doesn't proxy; products implement if needed
 - **Single-instance enforcement helpers**: products implement themselves
-- **Window state persistence (size, position)**: deferred from v1 in full. `webview/webview_go` exposes `SetSize` but no portable getter for current size or position; capturing user-resized dimensions requires platform-specific GTK/Win32 plumbing via the native `Window()` handle. Until that work is justified, each `Run`/`Window` invocation opens at `InitialSize`. When the native handle layer is added, the deferred runtime file at `{user_config_dir}/{AppID}/runtime/window_state.json` is where this will land.
+- **Window state persistence (size, position)**: deferred from v1 in full. The selected webview binding exposes `SetSize` but no portable getter for current size or position; capturing user-resized dimensions requires platform-specific GTK/Win32 plumbing via the native `Window()` handle. Until that work is justified, each `Run`/`Window` invocation opens at `InitialSize`. When the native handle layer is added, the deferred runtime file at `{user_config_dir}/{AppID}/runtime/window_state.json` is where this will land.
 - **Dynamic tray menu state (checked, disabled, label, tooltip)**: v1 reads `TrayMenuItem` fields once when the tray menu is built; `dfw` does not watch or rebuild the menu in response to product state changes. When a real use case appears, this gets designed as an explicit API (e.g. a `Tray.SetItem(idx, TrayMenuItem)` rebuild call or per-item handles) with cross-platform behavior pinned for both Windows and Linux. The omitted `TrayMenuItem.Checked *bool` from earlier drafts belongs here.
 - **Crash reporting**
 - **Accessibility-specific work** (OS webviews handle the common case)
@@ -423,7 +423,7 @@ Items explicitly out of scope for v1, captured for future consideration:
 
 This section captures decisions whose rationale should outlive the discussion that produced them.
 
-- **`webview/webview_go` over Wails**: minimal abstraction, preserves vanilla `go build`, sufficient for the consume-the-HTTP-boundary pattern. Wails remains a graduation path if native menus, dialogs, or in-process multi-window become hard requirements.
+- **`webview_go`-style binding over Wails**: minimal abstraction, preserves vanilla `go build`, sufficient for the consume-the-HTTP-boundary pattern. The initial implementation uses a WebKitGTK 4.1-compatible Go binding because Fedora 43 no longer provides the older WebKitGTK 4.0 pkg-config target. Wails remains a graduation path if native menus, dialogs, or in-process multi-window become hard requirements.
 - **`fyne.io/systray` over `getlantern/systray`**: cleaner API ergonomics, active maintenance lineage. Either would work; the choice is reversible.
 - **Reverse-DNS `AppID`**: matches macOS Bundle ID convention, avoids collisions in user config directories across vendors.
 - **Three entry points instead of a unified `Run(opts)` with a mode enum**: clearer at the call site; each function takes only the fields relevant to its mode.

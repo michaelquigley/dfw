@@ -49,7 +49,7 @@ Pure-Go scaffolding. Compiles and tests on every platform without a webview tool
 First stage with CGO + webview. Lands the `Run` entry point and platform-specific icon plumbing for Windows + Linux only.
 
 **New files:**
-- `webview.go` — thin wrapper over `github.com/webview/webview_go`. Centralizes `New(debug bool)`, `Navigate(url)`, `SetTitle`, `SetSize`, `Run()` (blocking), `Terminate()`, and devtools toggle. Keep the surface small so Stage 3 reuses it.
+- `webview.go` — thin wrapper over the selected WebKitGTK 4.1-compatible Go webview binding (`centrifuge.hectabit.org/HectaBit/webview_go` for the initial Linux/Fedora 43 implementation). Centralizes `New(debug bool)`, `Navigate(url)`, `SetTitle`, `SetSize`, `Run()` (blocking), `Terminate()`, and devtools toggle. Keep the surface small so Stage 3 reuses it.
 - `icon.go` — cross-platform icon decode helpers (PNG bytes → platform-native form where needed)
 - `icon_linux.go` — `//go:build linux`
 - `icon_windows.go` — `//go:build windows`
@@ -62,15 +62,15 @@ First stage with CGO + webview. Lands the `Run` entry point and platform-specifi
   6. Return the captured Serve error if non-nil and non-`ErrServerClosed`, else `nil` (the deferred cleanup has already shut the server down)
 
 **Dependencies added:**
-- `github.com/webview/webview_go` (MIT) — update `NOTICE`
-- Add a short developer-setup note to `README.md` calling out Linux requires `libwebkit2gtk-4.1-dev` + `libgtk-3-dev` and Windows requires WebView2 runtime (usually present on Win10+/Win11).
+- `centrifuge.hectabit.org/HectaBit/webview_go` (MIT) — update `NOTICE`. This binding is API-compatible with `github.com/webview/webview_go` but uses `webkit2gtk-4.1`, which is the WebKitGTK version available on Fedora 43.
+- Add a short developer-setup note to `README.md` calling out Linux requires GTK 3 + WebKitGTK 4.1 development files and Windows requires WebView2 runtime (usually present on Win10+/Win11).
 
 **Manual verification:**
 - Stand up a trivial `net/http` server returning a static HTML page; call `dfw.Run` with it. Window opens, displays the page, closes cleanly.
 - Set `DFW_DEVTOOLS=1` and confirm devtools inspector becomes available.
 - Confirm the window opens at `InitialSize`. Window-state persistence is deferred in v1 (see spec §Window state); there is nothing to verify across launches.
 
-**Critical files to read first:** Stage 1 files (especially `discovery.go`), webview/webview_go's `README.md` / godoc for current API surface — verify the close-event hook before depending on it.
+**Critical files to read first:** Stage 1 files (especially `discovery.go`), the selected webview binding's `README.md` / godoc for current API surface — verify the close-event hook before depending on it.
 
 ---
 
@@ -132,7 +132,7 @@ Single binary with three subcommands demonstrating all of Stages 1–3 end-to-en
 
 ## Cross-stage notes
 
-- **CGO toolchain on the dev machine.** Linux requires `libwebkit2gtk-4.1-dev` and `libgtk-3-dev`. Confirm these are installed before starting Stage 2 — webview/webview_go's `go build` will fail at link time without them. I'll check `pkg-config --exists webkit2gtk-4.1` and surface a clear error in the stage handoff if missing rather than burning time on cryptic CGO link failures.
+- **CGO toolchain on the dev machine.** Linux requires GTK 3 plus WebKitGTK 4.1 development files. On Fedora 43, `pkg-config --exists gtk+-3.0 webkit2gtk-4.1` must pass before Stage 2 can be fully verified.
 - **Windows GUI subsystem.** Per spec §Windows subsystem. Because `dfw-example-watch` is a single binary with subcommands (`run`/`daemon`/`window`), Windows cannot pick a subsystem per subcommand — the subsystem is a property of the linked binary. Stage 4's example README must document this as a binary-level choice, not as separate per-subcommand build steps: (1) `-ldflags "-H windowsgui"` for shipping builds — no console flashes for `run`/`window`, `daemon` diagnostics go to a log file; (2) console subsystem for dev-time builds — `daemon` prints to stdout normally, but `run`/`window` briefly flash a console. Do not bake either choice into `dfw` itself; the choice is the example's, and downstream products will make the same call for their own layouts.
 - **No commits from me.** User reviews each stage's diff and commits it. I produce a working tree per stage and stop for review.
 - **Testing posture.** Unit tests cross-platform throughout. The `dfwtest` build-tag integration tests mentioned in the spec are deferred — they need display-equipped CI runners which aren't set up yet. Stage 2/3 verification is manual smoke-testing on the dev box.

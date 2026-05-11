@@ -5,3 +5,9 @@ This product includes software developed for the dfw project.
 
 This product depends on github.com/michaelquigley/df, which is distributed
 under the MIT License.
+
+This product depends on centrifuge.hectabit.org/HectaBit/webview_go, which is
+distributed under the MIT License:
+
+Copyright (c) 2017 Serge Zaitsev
+Copyright (c) 2020 webview

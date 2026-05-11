@@ -35,6 +35,15 @@ go build ./...
 go test ./...
 ```
 
+Stage 2 and later use a WebKitGTK 4.1-compatible Go webview binding, so desktop
+builds need the native webview toolchain:
+
+- Linux: GTK 3 plus WebKitGTK 4.1 development files. On Fedora this is
+  `gtk3-devel webkit2gtk4.1-devel`; on Debian/Ubuntu this is typically
+  `libgtk-3-dev libwebkit2gtk-4.1-dev`.
+- Windows: WebView2 runtime, usually already present on Windows 10/11, plus a
+  CGO-capable Windows toolchain.
+
 Once `examples/dfw-example-watch` exists, a repository-wide `go build ./...`
 will require its React bundle first:
 

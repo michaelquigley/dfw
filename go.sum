@@ -1,3 +1,5 @@
+centrifuge.hectabit.org/HectaBit/webview_go v0.0.0-20240502074857-17ae24882d16 h1:gOFnYZ+G9R7Prc3Mn7z/v+LkPf/kQ2oUh5NCQd6n39k=
+centrifuge.hectabit.org/HectaBit/webview_go v0.0.0-20240502074857-17ae24882d16/go.mod h1:cAr/pT090G1kcy9uuCEUbZyGhUQRGOo4KVnkocx8BMA=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/michaelquigley/df v0.3.14 h1:gS0TBmibd7vjIWbhZhjWwhwtkUfVQDljUksUKvIbAgM=

@@ -3,6 +3,7 @@ module github.com/michaelquigley/dfw
 go 1.26.2
 
 require (
+	centrifuge.hectabit.org/HectaBit/webview_go v0.0.0-20240502074857-17ae24882d16
 	github.com/michaelquigley/df v0.3.14
 	github.com/stretchr/testify v1.11.1
 )
