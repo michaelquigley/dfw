@@ -18,6 +18,10 @@ pnpm install
 pnpm build
 ```
 
+The package metadata explicitly allows `esbuild`'s install script for pnpm.
+Vite uses esbuild's native binary, so pnpm's build-script approval mode must
+not block that dependency.
+
 The npm equivalent is:
 
 ```sh
