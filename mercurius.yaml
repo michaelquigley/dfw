@@ -1,0 +1,178 @@
+max_findings: 6
+
+# review_context describes project posture and constraints. it calibrates
+# reviewer rigor by stating what's true about the project: deployment model,
+# stakes, scope, locked decisions, simplicity-vs-defensiveness preference. the
+# reviewer suppresses findings that do not materially apply under this context.
+review_context: |
+  dfw is a small Go library at github.com/michaelquigley/dfw that wraps
+  a Go HTTP server (with embedded web UI) in a native webview window,
+  with an optional tray-resident daemon mode for background work and
+  multi-window scenarios. it is a sibling to df (the toolkit core) and
+  dfx (imgui-based desktop UI) in the same toolkit family. v1, pre-1.0,
+  no backward-compat concerns yet. single-author project, Apache 2.0
+  licensed. prefer simple over highly defensive when both achieve
+  correctness.
+
+  settled and out of scope to relitigate at the project level:
+  - the two operational modes: single-window (dfw.Run) and tray daemon
+    plus separate window processes (dfw.Daemon + dfw.Window)
+  - three entry points (Run/Daemon/Window) rather than a unified
+    Run(opts) with a mode enum
+  - multi-window via multi-process, not in-process; the native event
+    loop constraint is accepted, not worked around
+  - webview/webview_go over Wails; fyne.io/systray over
+    getlantern/systray; both choices documented and considered
+    reversible if a hard requirement surfaces
+  - the daemon-to-window contract is the product's HTTP API surface;
+    dfw provides no JS<->Go bridge, no HTTP forwarding/proxy between
+    processes, no native menu bar, no native file dialogs, no
+    single-instance enforcement, no distribution helpers, no
+    auto-update, no code signing, no login-item integration
+  - reverse-DNS AppID as the user-config namespace key
+  - daemon shutdown is handled at the OS level; dfw does not coordinate
+    window shutdown from the daemon side; product UI surfaces
+    connection-lost state on its own
+  - the runtime file is at {user_config_dir}/{AppID}/runtime/daemon.json
+    with fields pid/address (no protocol/version field; daemon<->window
+    version handshakes are explicitly out of scope for v1, and skew
+    across an in-place upgrade surfaces as whatever the product's HTTP
+    API does); dfw writes once on startup and removes on clean
+    shutdown; dfw does not detect stale files or already-running
+    daemons
+  - window state persistence (size, position) is deferred from v1 in
+    full; webview/webview_go exposes SetSize but no portable getter for
+    current size or position, and capturing user-resized dimensions
+    would require platform-specific GTK/Win32 plumbing via the native
+    Window() handle. every Run/Window invocation opens at InitialSize.
+    when native bounds plumbing is added the deferred runtime file at
+    {user_config_dir}/{AppID}/runtime/window_state.json is where it
+    will land
+  - DFW_DAEMON_ADDR env var takes precedence over the runtime file for
+    window discovery; DFW_DEVTOOLS env var (or --devtools flag wired by
+    the product) enables the inspector
+  - the demo lives at examples/dfw-example-watch and uses the
+    single-binary subcommand layout; products are free to pick a
+    different layout
+
+  the accompanying work order at docs/future/initial-work-order.md
+  introduces these additional implementation-level decisions, also
+  settled unless a fundamental flaw is found:
+  - MVP platform scope is Windows + Linux only; macOS is deferred and
+    no //go:build darwin files or _darwin.go companions are introduced
+    in the initial stages
+  - delivery is four phased PR-sized stages reviewed and committed by
+    the user between stages: (1) foundations - types, discovery,
+    state, devtools, spawn, license/notice/readme, no CGO; (2) Run
+    plus webview wrapper plus Linux+Windows icon plumbing; (3) Daemon
+    plus Window plus tray; (4) examples/dfw-example-watch with React
+    UI, fsnotify watcher, and all three subcommands
+  - tests use stretchr/testify; the spec's dfwtest build-tag
+    integration tests are deferred (no display-equipped CI runners
+    yet); per-stage verification beyond Stage 1 is manual smoke
+    testing on the dev box
+  - spawn helpers use exec.Command(...).Start() with DFW_DAEMON_ADDR
+    injected into cmd.Env, and reap the child via a goroutine that
+    calls cmd.Wait() and discards the result (so long-running daemons
+    do not accumulate zombies). SpawnWindow returns as soon as Start
+    succeeds; it does not block on Wait. Children outlive the daemon
+    via OS-level process semantics, not because the parent skipped
+    Wait.
+  - the example's Windows GUI-subsystem build flag
+    (-ldflags "-H windowsgui") is documented in the example's README
+    rather than baked into dfw itself
+
+# review_focus directs the reviewer at project-specific surfaces that the base
+# review philosophy does not already cover. the base prompt already carries
+# the universal subtle-vs-obvious filter, so this field is typically just one
+# paragraph naming the invariants or risks unique to this project.
+review_focus: |
+  this session reviews the initial design spec for dfw at
+  docs/future/initial-spec.md plus the staged work order at
+  docs/future/initial-work-order.md. pay particular attention to:
+
+  - the Listen callback contract. the public API hands dfw a
+    `Listen func() (*http.Server, net.Listener, error)` that products
+    construct. confirm this split between product (creates server +
+    listener) and dfw (calls Serve, derives the navigation URL from
+    listener.Addr, calls Shutdown on close) is clean enough that
+    products cannot accidentally hold lifecycle responsibility dfw
+    needs (e.g. closing the listener themselves) or leak goroutines if
+    Serve returns before the webview is ready. the contract should
+    also be ergonomic for the common case of binding 127.0.0.1:0 and
+    letting the OS pick a port.
+
+  - the discovery file and its failure surface. daemon writes
+    daemon.json on startup with pid/address and removes it on clean
+    shutdown; windows read DFW_DAEMON_ADDR first then fall back to
+    the file. version handshakes are explicitly out of scope for v1,
+    so do not ask for protocol-mismatch handling. confirm the spec's
+    stance on stale files (dfw does not detect them, products handle
+    single-instance if they need it) is honestly reflected
+    throughout - especially in the window's resolution path, which
+    should not silently succeed against a stale file pointing at a
+    dead address, and should make clear that a runtime-file address
+    is not liveness-checked.
+
+  - the multi-process spawn model. SpawnSelf and Spawn return
+    fire-and-forget closures that exec a child binary with
+    DFW_DAEMON_ADDR in the environment. confirm the spec's claim that
+    multi-window via multi-process is the right v1 answer holds up
+    against the practical cost (each window is a full webview
+    process), that the child correctly outlives the daemon on both
+    Windows and Linux (no inherited handle keeping the child tied to
+    the daemon's lifetime), and that the spec is honest about what
+    happens to open windows when the daemon exits (the spec says
+    "dfw does not coordinate window shutdown"; verify that this is
+    livable rather than a latent footgun).
+
+  - the daemon lifecycle and the tray event loop. spec §Lifecycle
+    "Daemon mode" has the daemon block on the tray event loop until
+    "Quit" is selected. confirm this ordering composes correctly with
+    the HTTP server goroutine and the daemon.json write/remove pair -
+    specifically that a panic or os-signal kill leaves a stale
+    daemon.json (the spec says yes, dfw does not handle this; confirm
+    that's reflected consistently).
+
+  - window state persistence is deferred in v1. do not ask for save
+    or restore behavior; every Run/Window invocation opens at
+    InitialSize. confirm the spec is honest that this is a deferral
+    (not silently lost behavior) and that no lifecycle step still
+    references loading or saving state.
+
+  - the dropped macOS scope. the work order drops macOS from MVP and
+    omits all _darwin.go files. confirm this drops cleanly given the
+    spec was written assuming all three platforms, that no
+    cross-platform code in dfw silently requires darwin to compile
+    (e.g. via build-tag inversions, switch-on-runtime.GOOS branches
+    with no default), and that re-adding macOS later is a localized
+    change rather than a redesign.
+
+  - the four-stage phasing. work order sequences foundations -> Run ->
+    Daemon+Window -> example. confirm no stage silently depends on a
+    later stage, that each is independently buildable and reviewable
+    cold, and that the Stage 1 / no-CGO boundary actually holds (e.g.
+    that none of app.go, discovery.go, state.go, devtools.go, spawn.go
+    pull in a transitive CGO dependency through their tests).
+
+  - what's deferred and what's load-bearing. confirm that the deferred
+    items (dfwtest integration tests, distribution helpers,
+    auto-update, code signing, single-instance enforcement, native
+    menus/dialogs) are genuinely deferrable rather than load-bearing
+    for the v1 contract. the "single-instance enforcement is the
+    product's problem" decision in particular is worth scrutinizing
+    against typical desktop-app expectations.
+
+  - the verification plan. each work-order stage names manual smoke
+    tests but no integration tests. confirm the unit-test surface at
+    Stage 1 (discovery, state, spawn) is adequate, that the manual
+    smoke tests at Stages 2-3 cover the surfaces that matter
+    (devtools toggle, state persistence across restarts, env-var vs
+    file discovery paths, child-outlives-daemon spawn behavior), and
+    that the Stage 4 example exercise list is complete enough to
+    surface regressions in any of Stages 1-3.
+
+reviewer:
+  name: codex
+  impl: codex
+  model: gpt-5.5
