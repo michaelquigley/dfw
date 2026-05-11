@@ -40,7 +40,9 @@ builds need the native webview toolchain:
 
 - Linux: GTK 3 plus WebKitGTK 4.1 development files. On Fedora this is
   `gtk3-devel webkit2gtk4.1-devel`; on Debian/Ubuntu this is typically
-  `libgtk-3-dev libwebkit2gtk-4.1-dev`.
+  `libgtk-3-dev libwebkit2gtk-4.1-dev`. Tray support uses the DBus
+  StatusNotifier/AppIndicator protocol, so the desktop environment needs a
+  compatible tray host.
 - Windows: WebView2 runtime, usually already present on Windows 10/11, plus a
   CGO-capable Windows toolchain.
 

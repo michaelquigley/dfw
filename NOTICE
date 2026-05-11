@@ -11,3 +11,6 @@ distributed under the MIT License:
 
 Copyright (c) 2017 Serge Zaitsev
 Copyright (c) 2020 webview
+
+This product depends on fyne.io/systray, which is distributed under the
+Apache License 2.0.
