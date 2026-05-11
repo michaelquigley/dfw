@@ -46,8 +46,8 @@ builds need the native webview toolchain:
 - Windows: WebView2 runtime, usually already present on Windows 10/11, plus a
   CGO-capable Windows toolchain.
 
-Once `examples/dfw-example-watch` exists, a repository-wide `go build ./...`
-will require its React bundle first:
+The `examples/dfw-example-watch` binary embeds its React bundle, so a
+repository-wide `go build ./...` requires that bundle first:
 
 ```sh
 cd examples/dfw-example-watch/web
@@ -55,5 +55,4 @@ pnpm install
 pnpm build
 ```
 
-See `examples/dfw-example-watch/README.md` for the full example build sequence
-after that example lands.
+See `examples/dfw-example-watch/README.md` for the full example build sequence.

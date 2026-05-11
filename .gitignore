@@ -10,3 +10,4 @@
 CODEX-*.md
 node_modules
 flo/ui/dist
+examples/dfw-example-watch/web/dist
