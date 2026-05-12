@@ -57,7 +57,7 @@ First stage with CGO + webview. Lands the `Run` entry point and platform-specifi
   1. Call `app.Listen()` to get server + listener; propagate the error as-is on failure
   2. Start a goroutine running `server.Serve(listener)`; capture its return value on a buffered `srvErr` channel (`http.ErrServerClosed` is expected post-shutdown; any other value is a fatal error for `Run`)
   3. `defer` a cleanup block that calls `server.Shutdown(ctx)` with a small timeout and then `<-srvErr` to wait for the goroutine to exit. This runs whether step 4+ succeed or fail
-  4. Create webview at `app.InitialSize`, `Navigate("http://" + listener.Addr().String())`. If webview construction or icon setup fails, return the error — the deferred cleanup handles the rest
+  4. Create webview at persisted bounds when available, otherwise `app.InitialSize`, then `Navigate("http://" + listener.Addr().String())`. If webview construction or icon setup fails, return the error — the deferred cleanup handles the rest
   5. Block on `wv.Run()` (or surface a captured non-`ErrServerClosed` Serve error early if the goroutine fails before the user closes the window)
   6. Return the captured Serve error if non-nil and non-`ErrServerClosed`, else `nil` (the deferred cleanup has already shut the server down)
 
@@ -68,7 +68,7 @@ First stage with CGO + webview. Lands the `Run` entry point and platform-specifi
 **Manual verification:**
 - Stand up a trivial `net/http` server returning a static HTML page; call `dfw.Run` with it. Window opens, displays the page, closes cleanly.
 - Set `DFW_DEVTOOLS=1` and confirm devtools inspector becomes available.
-- Confirm the window opens at `InitialSize`. Window-state persistence is deferred in v1 (see spec §Window state); there is nothing to verify across launches.
+- Confirm the window opens at `InitialSize` when no persisted window state exists.
 
 **Critical files to read first:** Stage 1 files (especially `discovery.go`), the selected webview binding's `README.md` / godoc for current API surface — verify the close-event hook before depending on it.
 
@@ -90,7 +90,7 @@ Multi-process flow. Tray daemon owns the HTTP server; window children connect vi
   7. Return the captured Serve error if non-nil and non-`ErrServerClosed`, else `nil` (the deferred cleanups have already shut the server down and removed `daemon.json`)
 - `window.go` — `func Window(app WindowApp) error` implementing spec §Lifecycle "Window mode":
   1. Resolve daemon address: `DFW_DAEMON_ADDR` env var first, then read `daemon.json` at the AppID-derived path; error if neither present
-  2. Create webview at `app.InitialSize`, navigate to `"http://" + resolvedAddr`
+  2. Create webview at persisted bounds when available, otherwise `app.InitialSize`, then navigate to `"http://" + resolvedAddr`
   3. Block on the webview event loop until the window closes; return any captured error
 
 **Dependencies added:**

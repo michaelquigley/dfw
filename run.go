@@ -54,6 +54,7 @@ func Run(app App) (err error) {
 	}()
 
 	window, err := newConfiguredWebView(webviewConfig{
+		AppID:       app.AppID,
 		Title:       app.Title,
 		InitialSize: app.InitialSize,
 		IconPNG:     app.IconPNG,
@@ -69,6 +70,7 @@ func Run(app App) (err error) {
 
 	window.Navigate("http://" + listener.Addr().String())
 	window.Run()
+	window.SaveWindowState()
 	return nil
 }
 

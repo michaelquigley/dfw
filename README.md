@@ -17,6 +17,10 @@ does not provide a UI framework, JavaScript-to-Go bridge, request proxy, native
 file dialogs, native menu bar API, single-instance enforcement, or packaging
 tooling.
 
+`Run` and `Window` automatically persist window size and, where the platform
+supports it, location under the app's runtime config directory. `InitialSize`
+is used when no valid saved bounds exist.
+
 ## Status
 
 Initial implementation. MVP platform support is Windows and Linux. macOS is

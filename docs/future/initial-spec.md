@@ -115,7 +115,7 @@ Version handshakes between daemon and window are out of scope for v1. An in-plac
 
 1. Call `app.Listen()` to obtain server and listener.
 2. Start serving in a goroutine.
-3. Create webview at `InitialSize`, navigate to the listener's address.
+3. Create webview at the persisted window bounds when available, otherwise `InitialSize`; navigate to the listener's address.
 4. Block on the webview event loop until the window closes.
 5. Shut down the HTTP server gracefully.
 6. Return.
@@ -136,7 +136,7 @@ When the daemon shuts down, any open window processes will lose their HTTP conne
 **Window mode (`dfw.Window`)**:
 
 1. Resolve the daemon address (env var, then runtime file).
-2. Create webview at `InitialSize`, navigate to the resolved address.
+2. Create webview at the persisted window bounds when available, otherwise `InitialSize`; navigate to the resolved address.
 3. Block on the webview event loop until the window closes.
 4. Return.
 
@@ -254,11 +254,15 @@ func DevToolsEnabled() bool
 
 ### Window state
 
-Window state persistence (size, position) is **deferred** in v1. The selected webview binding exposes `SetSize` but no portable getter for current size or position; capturing user-resized dimensions would require platform-specific GTK/Win32 plumbing via the native `Window()` handle. That work isn't justified by the value of relaunch-time size restoration at this stage.
+Window state persistence is automatic for `Run` and `Window` when `AppID` is set. `dfw` stores the latest known window bounds at:
 
-For v1, every `Run` and `Window` invocation opens its window at `InitialSize`. Products that need persistent layout coordinate it themselves (e.g. by persisting state in their HTTP API and replaying it after the page loads).
+```
+{user_config_dir}/{AppID}/runtime/window_state.json
+```
 
-See §Deferred / Future Work for the path back here.
+The file stores `width` and `height` everywhere. It stores `x` and `y` only when the platform can report useful screen coordinates. Windows supports size and location. Linux supports size everywhere; location is best-effort and currently X11-only because Wayland does not expose reliable application-controlled top-level window coordinates.
+
+If the file is missing, malformed, or contains an invalid size, `dfw` falls back to `InitialSize`. Window-state read/write failures are non-fatal and are logged through `dl`.
 
 ## Internal Structure
 
@@ -413,7 +417,7 @@ Items explicitly out of scope for v1, captured for future consideration:
 - **Native file dialog API**: same reasoning
 - **CLI ↔ daemon HTTP forwarding**: `dfw` doesn't proxy; products implement if needed
 - **Single-instance enforcement helpers**: products implement themselves
-- **Window state persistence (size, position)**: deferred from v1 in full. The selected webview binding exposes `SetSize` but no portable getter for current size or position; capturing user-resized dimensions requires platform-specific GTK/Win32 plumbing via the native `Window()` handle. Until that work is justified, each `Run`/`Window` invocation opens at `InitialSize`. When the native handle layer is added, the deferred runtime file at `{user_config_dir}/{AppID}/runtime/window_state.json` is where this will land.
+- **Additional window state**: maximized/fullscreen state, per-window-kind identities, and stricter multi-monitor restore policy are deferred. v1 persists one shared size/location record per `AppID`.
 - **Dynamic tray menu state (checked, disabled, label, tooltip)**: v1 reads `TrayMenuItem` fields once when the tray menu is built; `dfw` does not watch or rebuild the menu in response to product state changes. When a real use case appears, this gets designed as an explicit API (e.g. a `Tray.SetItem(idx, TrayMenuItem)` rebuild call or per-item handles) with cross-platform behavior pinned for both Windows and Linux. The omitted `TrayMenuItem.Checked *bool` from earlier drafts belongs here.
 - **Crash reporting**
 - **Accessibility-specific work** (OS webviews handle the common case)

@@ -10,6 +10,7 @@ func Window(app WindowApp) error {
 	}
 
 	window, err := newConfiguredWebView(webviewConfig{
+		AppID:       app.AppID,
 		Title:       app.Title,
 		InitialSize: app.InitialSize,
 		IconPNG:     app.IconPNG,
@@ -22,5 +23,6 @@ func Window(app WindowApp) error {
 
 	window.Navigate("http://" + daemonAddr)
 	window.Run()
+	window.SaveWindowState()
 	return nil
 }
