@@ -91,6 +91,9 @@ func (w *desktopWebView) SetIcon(iconPNG []byte) error {
 }
 
 func (w *desktopWebView) SetSize(size image.Point) {
+	if applyNativeWindowSize(w.w.Window(), size) {
+		return
+	}
 	w.w.SetSize(size.X, size.Y, webview.HintNone)
 }
 

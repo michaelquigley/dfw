@@ -3,6 +3,7 @@
 package dfw
 
 import (
+	"image"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -198,6 +199,10 @@ func windowBoundsWndProc(hwnd uintptr, msg uint32, wparam uintptr, lparam uintpt
 
 	ret, _, _ := procDefWindowProcW.Call(hwnd, uintptr(msg), wparam, lparam)
 	return ret
+}
+
+func applyNativeWindowSize(_ unsafe.Pointer, _ image.Point) bool {
+	return false
 }
 
 func applyNativeWindowLocation(window unsafe.Pointer, x int, y int) bool {

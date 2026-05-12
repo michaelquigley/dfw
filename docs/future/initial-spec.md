@@ -262,7 +262,7 @@ Window state persistence is automatic for `Run` and `Window` when `AppID` is set
 
 The file stores `width` and `height` everywhere. It stores `x` and `y` only when the platform can report useful screen coordinates. Windows supports size and location. Linux supports size everywhere; location is best-effort and currently X11-only because Wayland does not expose reliable application-controlled top-level window coordinates.
 
-If the file is missing, malformed, or contains an invalid size, `dfw` falls back to `InitialSize`. Window-state read/write failures are non-fatal and are logged through `dl`.
+If the file is missing, malformed, or contains an invalid or implausibly small size, `dfw` falls back to `InitialSize`. Window-state read/write failures are non-fatal and are logged through `dl`.
 
 ## Internal Structure
 

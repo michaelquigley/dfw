@@ -14,6 +14,8 @@ import (
 
 const windowStateJSON = "window_state.json"
 
+var minimumRestoredWindowSize = image.Pt(320, 240)
+
 type windowState struct {
 	Width  int
 	Height int
@@ -86,7 +88,7 @@ func windowStatePath(appID string) (string, error) {
 }
 
 func chooseInitialWindowSize(initial image.Point, state windowState, hasState bool) image.Point {
-	if hasState && state.validSize() {
+	if hasState && state.restorableSize(initial) {
 		return image.Pt(state.Width, state.Height)
 	}
 	return initial
@@ -115,6 +117,22 @@ func windowStateFromBounds(bounds windowBounds) windowState {
 
 func (s windowState) validSize() bool {
 	return s.Width > 0 && s.Height > 0
+}
+
+func (s windowState) restorableSize(initial image.Point) bool {
+	if !s.validSize() {
+		return false
+	}
+
+	minimum := minimumRestoredWindowSize
+	if initial.X > 0 && initial.X < minimum.X {
+		minimum.X = initial.X
+	}
+	if initial.Y > 0 && initial.Y < minimum.Y {
+		minimum.Y = initial.Y
+	}
+
+	return s.Width >= minimum.X && s.Height >= minimum.Y
 }
 
 func (s windowState) hasLocation() bool {

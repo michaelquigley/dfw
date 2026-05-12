@@ -125,6 +125,7 @@ func TestChooseInitialWindowSize(t *testing.T) {
 
 	assert.Equal(t, initial, chooseInitialWindowSize(initial, windowState{}, false))
 	assert.Equal(t, initial, chooseInitialWindowSize(initial, windowState{Width: -1, Height: 700}, true))
+	assert.Equal(t, initial, chooseInitialWindowSize(initial, windowState{Width: 212, Height: 200}, true))
 	assert.Equal(t, image.Pt(1200, 900), chooseInitialWindowSize(initial, windowState{Width: 1200, Height: 900}, true))
 }
 

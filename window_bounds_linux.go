@@ -23,6 +23,18 @@ typedef struct {
 	int destroyed;
 } dfw_window_bounds_tracker;
 
+typedef struct {
+	GtkWindow *window;
+	int width;
+	int height;
+} dfw_window_size_request;
+
+typedef struct {
+	GtkWindow *window;
+	int x;
+	int y;
+} dfw_window_location_request;
+
 static int dfw_linux_location_supported() {
 	GdkDisplay *display = gdk_display_get_default();
 	if (display == NULL) {
@@ -74,9 +86,13 @@ static gboolean dfw_linux_configure_event(GtkWidget *widget, GdkEvent *event, gp
 			tracker->height = configure->height;
 			tracker->has_bounds = 1;
 		}
+		if (tracker->location_supported) {
+			tracker->x = configure->x;
+			tracker->y = configure->y;
+			tracker->has_location = 1;
+		}
 	}
 
-	dfw_linux_update_window_bounds(tracker);
 	return FALSE;
 }
 
@@ -85,7 +101,6 @@ static void dfw_linux_destroy(GtkWidget *widget, gpointer data) {
 	if (tracker == NULL) {
 		return;
 	}
-	dfw_linux_update_window_bounds(tracker);
 	tracker->destroyed = 1;
 	tracker->window = NULL;
 }
@@ -102,7 +117,6 @@ static dfw_window_bounds_tracker *dfw_linux_start_window_bounds_tracker(GtkWindo
 
 	tracker->window = window;
 	tracker->location_supported = dfw_linux_location_supported();
-	dfw_linux_update_window_bounds(tracker);
 	tracker->configure_id = g_signal_connect(G_OBJECT(window), "configure-event", G_CALLBACK(dfw_linux_configure_event), tracker);
 	tracker->destroy_id = g_signal_connect(G_OBJECT(window), "destroy", G_CALLBACK(dfw_linux_destroy), tracker);
 	return tracker;
@@ -154,6 +168,50 @@ static void dfw_linux_window_bounds_tracker_free(dfw_window_bounds_tracker *trac
 	free(tracker);
 }
 
+static void dfw_linux_apply_window_size_now(GtkWindow *window, int width, int height) {
+	if (window == NULL || width <= 0 || height <= 0) {
+		return;
+	}
+	gtk_window_set_default_size(window, width, height);
+	gtk_window_resize(window, width, height);
+}
+
+static gboolean dfw_linux_apply_window_size_idle(gpointer data) {
+	dfw_window_size_request *request = (dfw_window_size_request *)data;
+	if (request != NULL) {
+		dfw_linux_apply_window_size_now(request->window, request->width, request->height);
+	}
+	return G_SOURCE_REMOVE;
+}
+
+static void dfw_linux_free_window_size_request(gpointer data) {
+	dfw_window_size_request *request = (dfw_window_size_request *)data;
+	if (request != NULL) {
+		if (request->window != NULL) {
+			g_object_unref(request->window);
+		}
+		free(request);
+	}
+}
+
+static int dfw_linux_apply_window_size(GtkWindow *window, int width, int height) {
+	if (window == NULL || width <= 0 || height <= 0) {
+		return 0;
+	}
+
+	dfw_linux_apply_window_size_now(window, width, height);
+
+	dfw_window_size_request *request = (dfw_window_size_request *)calloc(1, sizeof(dfw_window_size_request));
+	if (request == NULL) {
+		return 1;
+	}
+	request->window = GTK_WINDOW(g_object_ref(window));
+	request->width = width;
+	request->height = height;
+	g_idle_add_full(G_PRIORITY_HIGH_IDLE, dfw_linux_apply_window_size_idle, request, dfw_linux_free_window_size_request);
+	return 1;
+}
+
 static int dfw_linux_clamp(int value, int min, int max) {
 	if (value < min) {
 		return min;
@@ -164,9 +222,9 @@ static int dfw_linux_clamp(int value, int min, int max) {
 	return value;
 }
 
-static int dfw_linux_apply_window_location(GtkWindow *window, int x, int y) {
+static void dfw_linux_apply_window_location_now(GtkWindow *window, int x, int y) {
 	if (window == NULL || !dfw_linux_location_supported()) {
-		return 0;
+		return;
 	}
 
 	int width = 0;
@@ -196,12 +254,50 @@ static int dfw_linux_apply_window_location(GtkWindow *window, int x, int y) {
 	}
 
 	gtk_window_move(window, x, y);
+}
+
+static gboolean dfw_linux_apply_window_location_idle(gpointer data) {
+	dfw_window_location_request *request = (dfw_window_location_request *)data;
+	if (request != NULL) {
+		dfw_linux_apply_window_location_now(request->window, request->x, request->y);
+	}
+	return G_SOURCE_REMOVE;
+}
+
+static void dfw_linux_free_window_location_request(gpointer data) {
+	dfw_window_location_request *request = (dfw_window_location_request *)data;
+	if (request != NULL) {
+		if (request->window != NULL) {
+			g_object_unref(request->window);
+		}
+		free(request);
+	}
+}
+
+static int dfw_linux_apply_window_location(GtkWindow *window, int x, int y) {
+	if (window == NULL || !dfw_linux_location_supported()) {
+		return 0;
+	}
+
+	dfw_linux_apply_window_location_now(window, x, y);
+
+	dfw_window_location_request *request = (dfw_window_location_request *)calloc(1, sizeof(dfw_window_location_request));
+	if (request == NULL) {
+		return 1;
+	}
+	request->window = GTK_WINDOW(g_object_ref(window));
+	request->x = x;
+	request->y = y;
+	g_idle_add_full(G_PRIORITY_HIGH_IDLE, dfw_linux_apply_window_location_idle, request, dfw_linux_free_window_location_request);
 	return 1;
 }
 */
 import "C"
 
-import "unsafe"
+import (
+	"image"
+	"unsafe"
+)
 
 type linuxWindowBoundsTracker struct {
 	tracker *C.dfw_window_bounds_tracker
@@ -248,6 +344,13 @@ func (t *linuxWindowBoundsTracker) Close() {
 	}
 	C.dfw_linux_window_bounds_tracker_free(t.tracker)
 	t.tracker = nil
+}
+
+func applyNativeWindowSize(window unsafe.Pointer, size image.Point) bool {
+	if !validNativeWindow(window) || size.X <= 0 || size.Y <= 0 {
+		return false
+	}
+	return C.dfw_linux_apply_window_size((*C.GtkWindow)(window), C.int(size.X), C.int(size.Y)) != 0
 }
 
 func applyNativeWindowLocation(window unsafe.Pointer, x int, y int) bool {
