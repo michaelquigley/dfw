@@ -128,12 +128,12 @@ daemon.
 
 ## Icons
 
-`cmd/common.go:42` generates the icon procedurally at first use:
-a 32×32 NRGBA buffer, dark background, three colored rectangles (teal
-bar plus orange and red squares), encoded to PNG and cached behind a
-`sync.Once`. Real products would `//go:embed` an artist-supplied PNG
-instead; the procedural icon exists so the example doesn't need a
-separate asset file.
+`cmd/common.go` generates the icon procedurally at first use: an NRGBA buffer,
+dark background, three colored rectangles (teal bar plus orange and red
+squares), encoded to PNG. The 32×32 version is cached behind a `sync.Once` for
+window and tray use; the Linux desktop installer writes 32×32 and 128×128
+hicolor icon files. Real products would `//go:embed` artist-supplied PNGs
+instead.
 
 The same PNG bytes are used for the window icon and the tray icon. On
 Linux the tray icon is passed through directly; on Windows `dfw` wraps

@@ -23,6 +23,11 @@ a tray host that speaks one of those (GNOME Shell with the AppIndicator
 extension, KDE Plasma's stock tray, XFCE's `xfce4-statusnotifier-plugin`,
 etc. — most modern Linux desktops include one).
 
+The GNOME running-app panel/dock icon is not the same thing as the tray icon.
+For that icon, install a `.desktop` file and hicolor app icon whose basename
+matches `AppID`; `dfw` uses `AppID` as the Linux window identity so the shell
+can match the running window to that desktop entry.
+
 Fedora:
 
 ```sh

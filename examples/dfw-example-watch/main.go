@@ -31,6 +31,7 @@ func main() {
 		cmd.NewRunCommand(assets),
 		cmd.NewDaemonCommand(assets),
 		cmd.NewWindowCommand(),
+		cmd.NewInstallDesktopCommand(),
 	)
 
 	if err := root.Execute(); err != nil {

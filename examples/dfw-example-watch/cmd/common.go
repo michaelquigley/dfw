@@ -41,17 +41,7 @@ func applyDevTools(enabled bool) error {
 
 func appIconPNG() ([]byte, error) {
 	iconOnce.Do(func() {
-		const size = 32
-		img := image.NewNRGBA(image.Rect(0, 0, size, size))
-
-		draw.Draw(img, img.Bounds(), &image.Uniform{C: color.NRGBA{R: 22, G: 28, B: 36, A: 255}}, image.Point{}, draw.Src)
-		draw.Draw(img, image.Rect(6, 7, 26, 13), &image.Uniform{C: color.NRGBA{R: 74, G: 199, B: 185, A: 255}}, image.Point{}, draw.Src)
-		draw.Draw(img, image.Rect(6, 16, 14, 25), &image.Uniform{C: color.NRGBA{R: 245, G: 176, B: 65, A: 255}}, image.Point{}, draw.Src)
-		draw.Draw(img, image.Rect(17, 16, 26, 25), &image.Uniform{C: color.NRGBA{R: 235, G: 94, B: 94, A: 255}}, image.Point{}, draw.Src)
-
-		var buf bytes.Buffer
-		iconErr = png.Encode(&buf, img)
-		iconData = buf.Bytes()
+		iconData, iconErr = generateAppIconPNG(32)
 	})
 	if iconErr != nil {
 		return nil, iconErr
@@ -60,6 +50,28 @@ func appIconPNG() ([]byte, error) {
 		return nil, errors.New("empty generated icon")
 	}
 	return append([]byte(nil), iconData...), nil
+}
+
+func generateAppIconPNG(size int) ([]byte, error) {
+	if size <= 0 {
+		return nil, errors.New("icon size must be positive")
+	}
+
+	img := image.NewNRGBA(image.Rect(0, 0, size, size))
+	scaledRect := func(x0, y0, x1, y1 int) image.Rectangle {
+		return image.Rect(x0*size/32, y0*size/32, x1*size/32, y1*size/32)
+	}
+
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.NRGBA{R: 22, G: 28, B: 36, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, scaledRect(6, 7, 26, 13), &image.Uniform{C: color.NRGBA{R: 74, G: 199, B: 185, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, scaledRect(6, 16, 14, 25), &image.Uniform{C: color.NRGBA{R: 245, G: 176, B: 65, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, scaledRect(17, 16, 26, 25), &image.Uniform{C: color.NRGBA{R: 235, G: 94, B: 94, A: 255}}, image.Point{}, draw.Src)
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func windowApp() (dfw.WindowApp, error) {

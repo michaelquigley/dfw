@@ -40,6 +40,20 @@ go build .
 From the repository root, `go build ./...` also works after the React bundle
 exists.
 
+## Linux Desktop Entry
+
+GNOME's running-app panel/dock icon is separate from the daemon tray icon. To
+let GNOME match the window to this app's icon, install the example desktop
+entry and hicolor icons after building the binary:
+
+```sh
+./dfw-example-watch install-desktop
+```
+
+The command writes `com.quigley.dfw.example.watch.desktop` and matching icon
+files below `$XDG_DATA_HOME`, or below `$HOME/.local/share` when
+`XDG_DATA_HOME` is unset or relative.
+
 ## Run
 
 Single-window mode:

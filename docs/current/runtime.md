@@ -144,6 +144,11 @@ No client-side resizing happens. Supply an icon at a reasonable display
 size (32×32 is a good default for tray icons; window icons are commonly
 larger).
 
+On GNOME, the running-app panel/dock icon is matched through desktop identity,
+not just the per-window pixbuf. Linux windows use `AppID` for the process/window
+class and themed icon name; products should install a desktop entry and hicolor
+icon whose basename matches the same `AppID`.
+
 ## Failure Behavior
 
 - If the HTTP server's `Serve()` returns an error after startup, the

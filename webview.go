@@ -25,14 +25,18 @@ type desktopWebView struct {
 }
 
 func newConfiguredWebView(config webviewConfig) (*desktopWebView, error) {
+	appID := strings.TrimSpace(config.AppID)
+	prepareNativeWindowIdentity(appID)
+
 	w := webview.New(config.Debug)
 	if w == nil {
 		return nil, errors.New("dfw: create webview")
 	}
+	applyNativeWindowIdentity(w.Window(), appID)
 
 	window := &desktopWebView{
 		w:             w,
-		appID:         strings.TrimSpace(config.AppID),
+		appID:         appID,
 		boundsTracker: newNativeWindowBoundsTracker(w.Window()),
 	}
 	if config.Title != "" {
