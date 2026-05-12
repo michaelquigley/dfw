@@ -74,6 +74,9 @@ func newNativeWindowBoundsTracker(window unsafe.Pointer) nativeWindowBoundsTrack
 	tracker := &windowsWindowBoundsTracker{hwnd: uintptr(window)}
 	tracker.capture()
 
+	// Map first, then install. The new wndproc reads the map; if we installed
+	// first, a message arriving before Store would find no tracker and fall
+	// through to DefWindowProcW instead of the webview's original wndproc.
 	windowsTrackers.Store(tracker.hwnd, tracker)
 	oldProc, _, _ := procSetWindowLongPtrW.Call(tracker.hwnd, gwlpWndProc, boundsWindowProc)
 	if oldProc == 0 {

@@ -72,6 +72,34 @@ func TestResolveDaemonAddrMissing(t *testing.T) {
 	assert.ErrorIs(t, err, errDaemonAddressMissing)
 }
 
+func TestResolveDaemonAddrRejectsMalformedEnv(t *testing.T) {
+	configDir := t.TempDir()
+	withUserConfigDir(t, configDir)
+	t.Setenv(daemonAddrEnv, "not-a-host-port")
+
+	addr, err := resolveDaemonAddr("com.example.app")
+	require.Error(t, err)
+	assert.Empty(t, addr)
+	assert.ErrorIs(t, err, errDaemonAddressMissing)
+}
+
+func TestResolveDaemonAddrRejectsMalformedRuntime(t *testing.T) {
+	configDir := t.TempDir()
+	withUserConfigDir(t, configDir)
+	t.Setenv(daemonAddrEnv, "")
+
+	_, err := writeDaemonRuntime("com.example.app", daemonRuntime{
+		PID:     12345,
+		Address: "not-a-host-port",
+	})
+	require.NoError(t, err)
+
+	addr, err := resolveDaemonAddr("com.example.app")
+	require.Error(t, err)
+	assert.Empty(t, addr)
+	assert.ErrorIs(t, err, errDaemonAddressMissing)
+}
+
 func TestDaemonRuntimePathShape(t *testing.T) {
 	configDir := t.TempDir()
 	withUserConfigDir(t, configDir)
@@ -102,13 +130,6 @@ func TestDaemonRuntimePathRequiresAppID(t *testing.T) {
 	require.Error(t, err)
 	assert.Empty(t, path)
 	assert.ErrorIs(t, err, errEmptyAppID)
-}
-
-func TestRemoveDaemonRuntimeIgnoresMissingFile(t *testing.T) {
-	configDir := t.TempDir()
-	withUserConfigDir(t, configDir)
-
-	require.NoError(t, removeDaemonRuntime("com.example.app"))
 }
 
 func TestUserConfigDirError(t *testing.T) {

@@ -1,8 +1,8 @@
 package dfw
 
 import (
-	"errors"
 	"os"
+	"sync"
 )
 
 // Daemon starts a tray-resident daemon. This process owns the HTTP server and
@@ -10,48 +10,21 @@ import (
 // window discovery. It returns when the daemon is shut down via the tray menu
 // or on fatal error.
 func Daemon(app DaemonApp) (err error) {
-	if app.Listen == nil {
-		return errors.New("dfw: daemon listen function is required")
-	}
-
-	server, listener, err := app.Listen()
+	server, listener, err := resolveListen("daemon", app.Listen)
 	if err != nil {
 		return err
 	}
-	if server == nil {
-		if listener != nil {
-			_ = listener.Close()
-		}
-		return errors.New("dfw: listen returned nil server")
-	}
-	if listener == nil {
-		return errors.New("dfw: listen returned nil listener")
-	}
 
-	serveErr := startHTTPServer(server, listener)
 	trayStop := make(chan struct{})
-
-	var observedServeErr error
-	serveDone := make(chan struct{})
-	go func() {
-		if serveErr := <-serveErr; serveErr != nil {
-			observedServeErr = serveErr
-			close(trayStop)
-		}
-		close(serveDone)
-	}()
-
+	var stopOnce sync.Once
+	supervisor := superviseServe(server, listener, func() {
+		stopOnce.Do(func() { close(trayStop) })
+	})
 	defer func() {
-		shutdownErr := shutdownHTTPServer(server)
-		<-serveDone
-		if err != nil {
-			return
+		shutdownErr := supervisor.Shutdown()
+		if err == nil {
+			err = shutdownErr
 		}
-		if observedServeErr != nil {
-			err = observedServeErr
-			return
-		}
-		err = shutdownErr
 	}()
 
 	runtimePath, err := writeDaemonRuntime(app.AppID, daemonRuntime{

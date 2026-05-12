@@ -3,6 +3,7 @@ package dfw
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,9 @@ type daemonRuntime struct {
 
 func resolveDaemonAddr(appID string) (string, error) {
 	if addr, ok := os.LookupEnv(daemonAddrEnv); ok && addr != "" {
+		if err := validateDaemonAddr(addr); err != nil {
+			return "", fmt.Errorf("%w: %s: %v", errDaemonAddressMissing, daemonAddrEnv, err)
+		}
 		return addr, nil
 	}
 
@@ -40,7 +44,17 @@ func resolveDaemonAddr(appID string) (string, error) {
 	if runtime.Address == "" {
 		return "", fmt.Errorf("%w: runtime file has empty address", errDaemonAddressMissing)
 	}
+	if err := validateDaemonAddr(runtime.Address); err != nil {
+		return "", fmt.Errorf("%w: runtime file: %v", errDaemonAddressMissing, err)
+	}
 	return runtime.Address, nil
+}
+
+func validateDaemonAddr(addr string) error {
+	if _, _, err := net.SplitHostPort(addr); err != nil {
+		return err
+	}
+	return nil
 }
 
 func writeDaemonRuntime(appID string, runtime daemonRuntime) (string, error) {
@@ -75,17 +89,6 @@ func readDaemonRuntime(appID string) (daemonRuntime, error) {
 	}
 
 	return runtime, nil
-}
-
-func removeDaemonRuntime(appID string) error {
-	path, err := daemonRuntimePath(appID)
-	if err != nil {
-		return err
-	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("dfw: remove daemon runtime: %w", err)
-	}
-	return nil
 }
 
 func daemonRuntimePath(appID string) (string, error) {
