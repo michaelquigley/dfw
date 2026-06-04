@@ -17,9 +17,9 @@ examples/dfw-example-watch/
 ├── main.go             # cobra root, embeds web/dist via //go:embed
 ├── cmd/
 │   ├── common.go       # appID, icon generator, shared helpers
-│   ├── run.go          # `run` subcommand -> dfw.Run
-│   ├── daemon.go       # `daemon` subcommand -> dfw.Daemon
-│   └── window.go       # `window` subcommand -> dfw.Window
+│   ├── run.go          # `run` subcommand -> webview.Run
+│   ├── daemon.go       # `daemon` subcommand -> tray.Daemon
+│   └── window.go       # `window` subcommand -> webview.Window
 ├── server/
 │   └── server.go       # HTTP handlers + dfw Listen callback
 ├── watcher/
@@ -54,8 +54,8 @@ walks it and adds every nested directory to the backend.
 ## The Server
 
 `server.Listen(assets, watch)` (`server/server.go:44`) returns a
-function with the signature `dfw` expects for `App.Listen` /
-`DaemonApp.Listen`:
+function with the signature `dfw` expects for `webview.App.Listen` /
+`tray.DaemonApp.Listen`:
 
 ```go
 func() (*http.Server, net.Listener, error)
@@ -85,13 +85,13 @@ with the rest of the `df` ecosystem.
 dfw-example-watch run [path]
 ```
 
-Calls `dfw.Run` with the watcher and server in the same process. If
+Calls `webview.Run` with the watcher and server in the same process. If
 `[path]` is omitted, the current working directory is watched.
-`--devtools` sets `DFW_DEVTOOLS=1` before `dfw.Run` opens the webview.
+`--devtools` sets `DFW_DEVTOOLS=1` before `webview.Run` opens the webview.
 
 See `cmd/run.go`. The full wiring is six lines of business logic:
 parse the path → start the watcher → produce the icon → call
-`dfw.Run`.
+`webview.Run`.
 
 ### `daemon`
 
@@ -99,9 +99,9 @@ parse the path → start the watcher → produce the icon → call
 dfw-example-watch daemon [path]
 ```
 
-Calls `dfw.Daemon` and stays resident in the tray. The tray menu is:
+Calls `tray.Daemon` and stays resident in the tray. The tray menu is:
 
-- `Open Window` — `dfw.SpawnSelf("window")`, which re-executes the
+- `Open Window` — `tray.SpawnSelf("window")`, which re-executes the
   daemon's own binary with the `window` subcommand and
   `DFW_DAEMON_ADDR` populated.
 - `Watching <basename>` — a disabled item showing the watched
@@ -117,7 +117,7 @@ the `window` subcommand manually) to attach.
 dfw-example-watch window
 ```
 
-Calls `dfw.Window`, which resolves the daemon address via
+Calls `webview.Window`, which resolves the daemon address via
 `DFW_DAEMON_ADDR` or the runtime file (see [runtime.md](runtime.md))
 and opens a webview against it. `--devtools` toggles devtools the same
 way `run` does. When the daemon spawns a window via `SpawnSelf`, the

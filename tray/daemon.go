@@ -1,8 +1,10 @@
-package dfw
+package tray
 
 import (
 	"os"
 	"sync"
+
+	"github.com/michaelquigley/dfw/internal/core"
 )
 
 // Daemon starts a tray-resident daemon. This process owns the HTTP server and
@@ -10,14 +12,14 @@ import (
 // window discovery. It returns when the daemon is shut down via the tray menu
 // or on fatal error.
 func Daemon(app DaemonApp) (err error) {
-	server, listener, err := resolveListen("daemon", app.Listen)
+	server, listener, err := core.ResolveListen("daemon", app.Listen)
 	if err != nil {
 		return err
 	}
 
 	trayStop := make(chan struct{})
 	var stopOnce sync.Once
-	supervisor := superviseServe(server, listener, func() {
+	supervisor := core.SuperviseServe(server, listener, func() {
 		stopOnce.Do(func() { close(trayStop) })
 	})
 	defer func() {
@@ -27,7 +29,7 @@ func Daemon(app DaemonApp) (err error) {
 		}
 	}()
 
-	runtimePath, err := writeDaemonRuntime(app.AppID, daemonRuntime{
+	runtimePath, err := core.WriteDaemonRuntime(app.AppID, core.DaemonRuntime{
 		PID:     os.Getpid(),
 		Address: listener.Addr().String(),
 	})

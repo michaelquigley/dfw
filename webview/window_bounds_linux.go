@@ -1,6 +1,6 @@
 //go:build linux
 
-package dfw
+package webview
 
 /*
 #cgo pkg-config: gtk+-3.0
@@ -297,6 +297,8 @@ import "C"
 import (
 	"image"
 	"unsafe"
+
+	"github.com/michaelquigley/dfw/internal/core"
 )
 
 type linuxWindowBoundsTracker struct {
@@ -314,9 +316,9 @@ func newNativeWindowBoundsTracker(window unsafe.Pointer) nativeWindowBoundsTrack
 	return &linuxWindowBoundsTracker{tracker: tracker}
 }
 
-func (t *linuxWindowBoundsTracker) Bounds() (windowBounds, bool) {
+func (t *linuxWindowBoundsTracker) Bounds() (core.WindowBounds, bool) {
 	if t == nil || t.tracker == nil {
-		return windowBounds{}, false
+		return core.WindowBounds{}, false
 	}
 
 	var ok C.int
@@ -327,9 +329,9 @@ func (t *linuxWindowBoundsTracker) Bounds() (windowBounds, bool) {
 	var hasLocation C.int
 	C.dfw_linux_window_bounds_snapshot(t.tracker, &ok, &width, &height, &x, &y, &hasLocation)
 	if ok == 0 {
-		return windowBounds{}, false
+		return core.WindowBounds{}, false
 	}
-	return windowBounds{
+	return core.WindowBounds{
 		Width:       int(width),
 		Height:      int(height),
 		X:           int(x),

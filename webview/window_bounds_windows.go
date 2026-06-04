@@ -1,12 +1,14 @@
 //go:build windows
 
-package dfw
+package webview
 
 import (
 	"image"
 	"sync"
 	"syscall"
 	"unsafe"
+
+	"github.com/michaelquigley/dfw/internal/core"
 )
 
 const (
@@ -46,7 +48,7 @@ type windowsWindowBoundsTracker struct {
 	oldProc uintptr
 
 	mu        sync.Mutex
-	bounds    windowBounds
+	bounds    core.WindowBounds
 	ok        bool
 	destroyed bool
 	closed    bool
@@ -90,9 +92,9 @@ func newNativeWindowBoundsTracker(window unsafe.Pointer) nativeWindowBoundsTrack
 	return tracker
 }
 
-func (t *windowsWindowBoundsTracker) Bounds() (windowBounds, bool) {
+func (t *windowsWindowBoundsTracker) Bounds() (core.WindowBounds, bool) {
 	if t == nil {
-		return windowBounds{}, false
+		return core.WindowBounds{}, false
 	}
 
 	t.mu.Lock()
@@ -151,7 +153,7 @@ func (t *windowsWindowBoundsTracker) capture() {
 	}
 
 	dpi := windowDPI(t.hwnd)
-	bounds := windowBounds{
+	bounds := core.WindowBounds{
 		Width:  scaleToDefaultDPI(width, dpi),
 		Height: scaleToDefaultDPI(height, dpi),
 	}

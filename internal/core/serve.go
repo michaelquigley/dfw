@@ -1,4 +1,4 @@
-package dfw
+package core
 
 import (
 	"context"
@@ -12,10 +12,10 @@ import (
 
 const serverShutdownTimeout = 5 * time.Second
 
-// resolveListen invokes the caller-provided listen function and validates its
+// ResolveListen invokes the caller-provided listen function and validates its
 // results. The name argument identifies the entry point ("run", "daemon") so
 // the returned errors point at the source.
-func resolveListen(name string, listen func() (*http.Server, net.Listener, error)) (*http.Server, net.Listener, error) {
+func ResolveListen(name string, listen func() (*http.Server, net.Listener, error)) (*http.Server, net.Listener, error) {
 	if listen == nil {
 		return nil, nil, fmt.Errorf("dfw: %s: listen function is required", name)
 	}
@@ -35,22 +35,22 @@ func resolveListen(name string, listen func() (*http.Server, net.Listener, error
 	return server, listener, nil
 }
 
-// serveSupervisor runs an HTTP server in the background and surfaces an
-// unexpected failure through an onFailure callback. The supervisor must be
-// shut down via Shutdown before the surrounding entry point returns.
-type serveSupervisor struct {
+// Supervisor runs an HTTP server in the background and surfaces an unexpected
+// failure through an onFailure callback. The supervisor must be shut down via
+// Shutdown before the surrounding entry point returns.
+type Supervisor struct {
 	server       *http.Server
 	done         chan struct{}
 	observedErr  error
 	shuttingDown atomic.Bool
 }
 
-// superviseServe starts server.Serve(listener) in a goroutine. If the server
+// SuperviseServe starts server.Serve(listener) in a goroutine. If the server
 // exits with an error before Shutdown is called, observedErr is recorded and
 // onFailure (if non-nil) is invoked. http.ErrServerClosed is treated as a
 // clean exit and is not surfaced to onFailure.
-func superviseServe(server *http.Server, listener net.Listener, onFailure func()) *serveSupervisor {
-	s := &serveSupervisor{
+func SuperviseServe(server *http.Server, listener net.Listener, onFailure func()) *Supervisor {
+	s := &Supervisor{
 		server: server,
 		done:   make(chan struct{}),
 	}
@@ -71,7 +71,7 @@ func superviseServe(server *http.Server, listener net.Listener, onFailure func()
 // Shutdown gracefully stops the server and waits for the serve goroutine to
 // exit. The observed serve error takes precedence over the shutdown error;
 // both nil means a clean stop.
-func (s *serveSupervisor) Shutdown() error {
+func (s *Supervisor) Shutdown() error {
 	s.shuttingDown.Store(true)
 	shutdownErr := shutdownHTTPServer(s.server)
 	<-s.done

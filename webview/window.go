@@ -1,10 +1,12 @@
-package dfw
+package webview
+
+import "github.com/michaelquigley/dfw/internal/core"
 
 // Window opens a single webview window pointing at a remote HTTP server. It
 // discovers the server address via DFW_DAEMON_ADDR or the AppID-derived
 // runtime file.
 func Window(app WindowApp) error {
-	daemonAddr, err := resolveDaemonAddr(app.AppID)
+	daemonAddr, err := core.ResolveDaemonAddr(app.AppID)
 	if err != nil {
 		return err
 	}

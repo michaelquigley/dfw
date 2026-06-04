@@ -1,6 +1,6 @@
 //go:build !linux && !windows
 
-package dfw
+package webview
 
 import (
 	"image"

@@ -1,4 +1,4 @@
-package dfw
+package core
 
 import (
 	"bytes"
@@ -9,7 +9,9 @@ import (
 	"image/png"
 )
 
-func decodeIconPNG(iconPNG []byte) (*image.NRGBA, error) {
+// DecodeIconPNG decodes PNG icon bytes into an NRGBA image. It returns a nil
+// image (and nil error) when iconPNG is empty.
+func DecodeIconPNG(iconPNG []byte) (*image.NRGBA, error) {
 	if len(iconPNG) == 0 {
 		return nil, nil
 	}

@@ -1,12 +1,14 @@
 //go:build windows
 
-package dfw
+package webview
 
 import (
 	"fmt"
 	"image"
 	"syscall"
 	"unsafe"
+
+	"github.com/michaelquigley/dfw/internal/core"
 )
 
 const (
@@ -75,7 +77,7 @@ func applyWindowIcon(window unsafe.Pointer, iconPNG []byte) error {
 		return nil
 	}
 
-	img, err := decodeIconPNG(iconPNG)
+	img, err := core.DecodeIconPNG(iconPNG)
 	if err != nil {
 		return err
 	}

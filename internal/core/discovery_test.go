@@ -1,4 +1,4 @@
-package dfw
+package core
 
 import (
 	"encoding/json"
@@ -17,7 +17,7 @@ func TestDaemonRuntimeRoundTrip(t *testing.T) {
 
 	expectedPath := filepath.Join(configDir, "com.example.app", "runtime", "daemon.json")
 
-	path, err := writeDaemonRuntime("com.example.app", daemonRuntime{
+	path, err := WriteDaemonRuntime("com.example.app", DaemonRuntime{
 		PID:     12345,
 		Address: "127.0.0.1:53291",
 	})
@@ -39,7 +39,7 @@ func TestDaemonRuntimeRoundTrip(t *testing.T) {
 
 	runtime, err := readDaemonRuntime("com.example.app")
 	require.NoError(t, err)
-	assert.Equal(t, daemonRuntime{
+	assert.Equal(t, DaemonRuntime{
 		PID:     12345,
 		Address: "127.0.0.1:53291",
 	}, runtime)
@@ -48,15 +48,15 @@ func TestDaemonRuntimeRoundTrip(t *testing.T) {
 func TestResolveDaemonAddrEnvOverridesRuntimeFile(t *testing.T) {
 	configDir := t.TempDir()
 	withUserConfigDir(t, configDir)
-	t.Setenv(daemonAddrEnv, "127.0.0.1:11111")
+	t.Setenv(DaemonAddrEnv, "127.0.0.1:11111")
 
-	_, err := writeDaemonRuntime("com.example.app", daemonRuntime{
+	_, err := WriteDaemonRuntime("com.example.app", DaemonRuntime{
 		PID:     12345,
 		Address: "127.0.0.1:22222",
 	})
 	require.NoError(t, err)
 
-	addr, err := resolveDaemonAddr("com.example.app")
+	addr, err := ResolveDaemonAddr("com.example.app")
 	require.NoError(t, err)
 	assert.Equal(t, "127.0.0.1:11111", addr)
 }
@@ -64,9 +64,9 @@ func TestResolveDaemonAddrEnvOverridesRuntimeFile(t *testing.T) {
 func TestResolveDaemonAddrMissing(t *testing.T) {
 	configDir := t.TempDir()
 	withUserConfigDir(t, configDir)
-	t.Setenv(daemonAddrEnv, "")
+	t.Setenv(DaemonAddrEnv, "")
 
-	addr, err := resolveDaemonAddr("com.example.app")
+	addr, err := ResolveDaemonAddr("com.example.app")
 	require.Error(t, err)
 	assert.Empty(t, addr)
 	assert.ErrorIs(t, err, errDaemonAddressMissing)
@@ -75,9 +75,9 @@ func TestResolveDaemonAddrMissing(t *testing.T) {
 func TestResolveDaemonAddrRejectsMalformedEnv(t *testing.T) {
 	configDir := t.TempDir()
 	withUserConfigDir(t, configDir)
-	t.Setenv(daemonAddrEnv, "not-a-host-port")
+	t.Setenv(DaemonAddrEnv, "not-a-host-port")
 
-	addr, err := resolveDaemonAddr("com.example.app")
+	addr, err := ResolveDaemonAddr("com.example.app")
 	require.Error(t, err)
 	assert.Empty(t, addr)
 	assert.ErrorIs(t, err, errDaemonAddressMissing)
@@ -86,15 +86,15 @@ func TestResolveDaemonAddrRejectsMalformedEnv(t *testing.T) {
 func TestResolveDaemonAddrRejectsMalformedRuntime(t *testing.T) {
 	configDir := t.TempDir()
 	withUserConfigDir(t, configDir)
-	t.Setenv(daemonAddrEnv, "")
+	t.Setenv(DaemonAddrEnv, "")
 
-	_, err := writeDaemonRuntime("com.example.app", daemonRuntime{
+	_, err := WriteDaemonRuntime("com.example.app", DaemonRuntime{
 		PID:     12345,
 		Address: "not-a-host-port",
 	})
 	require.NoError(t, err)
 
-	addr, err := resolveDaemonAddr("com.example.app")
+	addr, err := ResolveDaemonAddr("com.example.app")
 	require.Error(t, err)
 	assert.Empty(t, addr)
 	assert.ErrorIs(t, err, errDaemonAddressMissing)
@@ -159,5 +159,5 @@ func withUserConfigDir(t *testing.T, dir string) {
 		userConfigDir = oldUserConfigDir
 	})
 
-	t.Setenv(daemonAddrEnv, "")
+	t.Setenv(DaemonAddrEnv, "")
 }

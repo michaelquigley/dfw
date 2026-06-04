@@ -11,9 +11,9 @@ All paths below resolve against `os.UserConfigDir()`:
 - Windows: `%AppData%` (typically `C:\Users\<user>\AppData\Roaming`)
 - macOS: `~/Library/Application Support`
 
-The per-app subdirectory is named after `App.AppID` (or `DaemonApp.AppID`
-/ `WindowApp.AppID`) — typically a reverse-DNS string such as
-`com.quigley.flo`.
+The per-app subdirectory is named after the app's `AppID`
+(`webview.App.AppID`, `tray.DaemonApp.AppID`, or `webview.WindowApp.AppID`) —
+typically a reverse-DNS string such as `com.quigley.flo`.
 
 ## Window State
 
@@ -48,7 +48,7 @@ forfeits the in-flight size and position changes.
 
 ## Daemon Discovery
 
-`dfw.Daemon` writes
+`tray.Daemon` writes
 `{user_config_dir}/{AppID}/runtime/daemon.json` on startup and removes
 it on clean shutdown. 0600 mode, JSON-encoded.
 
@@ -72,14 +72,14 @@ Products that need single-instance behavior implement it themselves.
 
 ### `DFW_DAEMON_ADDR`
 
-`dfw.Window` resolves the daemon address via the
+`webview.Window` resolves the daemon address via the
 `DFW_DAEMON_ADDR` environment variable first; if unset or empty, it
 falls back to reading `daemon.json` for the same `AppID`. In both
 cases the resolved address is validated with `net.SplitHostPort`
 before being returned — a malformed value surfaces immediately rather
 than later at navigation time.
 
-`dfw.SpawnSelf` (and the lower-level `dfw.Spawn`) sets this env var
+`tray.SpawnSelf` (and the lower-level `tray.Spawn`) sets this env var
 when the daemon spawns a window child, so the spawned window does not
 need to read the runtime file. The runtime file is the discovery
 mechanism for windows launched independently of the daemon (e.g., a
@@ -93,29 +93,29 @@ the `DFW_DEVTOOLS` environment variable set to any value other than the
 case-insensitive and whitespace-trimmed. Any other value — `1`, `true`,
 `yes`, or anything unrecognized — enables devtools.
 
-`dfw.DevToolsEnabled()` exposes the same check for products that want to
+`webview.DevToolsEnabled()` exposes the same check for products that want to
 gate their own debug behavior on it (verbose logging, extra HTTP
 endpoints, etc.).
 
 Products typically expose this via a `--devtools` flag that sets
-`DFW_DEVTOOLS=1` for the current process before calling `dfw.Run` /
-`dfw.Window`. When a daemon spawns a window child through
-`dfw.SpawnSelf`, the env var is inherited.
+`DFW_DEVTOOLS=1` for the current process before calling `webview.Run` /
+`webview.Window`. When a daemon spawns a window child through
+`tray.SpawnSelf`, the env var is inherited.
 
 ## Tray
 
-`dfw.Daemon` shows a system tray entry built at startup. The menu has
+`tray.Daemon` shows a system tray entry built at startup. The menu has
 three regions, in this order:
 
 1. **`Open Window`** — added only when `DaemonApp.SpawnWindow` is
    non-nil. Clicking it calls `SpawnWindow(daemonAddr)`; the typical
-   implementation is `dfw.SpawnSelf("window")`. Errors are logged via
+   implementation is `tray.SpawnSelf("window")`. Errors are logged via
    `df/dl` and do not tear down the daemon.
 2. **Product items** — each `TrayMenuItem` from `DaemonApp.TrayItems`
    becomes a menu entry with the supplied `Label`, `Tooltip`, and
    `OnClick`. `Disabled: true` items are added but greyed out.
 3. **Separator + `Quit`** — clicking `Quit` triggers the systray
-   shutdown, which returns control to `dfw.Daemon` and lets the
+   shutdown, which returns control to `tray.Daemon` and lets the
    library's deferred cleanup run.
 
 The menu is built once at startup. Items cannot be added, removed, or
@@ -126,7 +126,7 @@ The tray tooltip is set from `DaemonApp.Title` when non-empty.
 
 ## Icons
 
-`App.IconPNG`, `DaemonApp.IconPNG`, and `WindowApp.IconPNG` all take raw
+`webview.App.IconPNG`, `tray.DaemonApp.IconPNG`, and `webview.WindowApp.IconPNG` all take raw
 PNG bytes. Products supply the icon however they like — embedded via
 `//go:embed`, read from a file, generated procedurally — and `dfw`
 converts to the platform-native form:
@@ -160,7 +160,7 @@ icon whose basename matches the same `AppID`.
   `server.Shutdown(ctx)` with a 5-second timeout, falling back to
   `server.Close()` on timeout.
 - `daemon.json` is removed on clean shutdown only. A daemon killed
-  with `SIGKILL` leaves a stale file; subsequent `dfw.Window` launches
+  with `SIGKILL` leaves a stale file; subsequent `webview.Window` launches
   read the stale address and fail at the HTTP layer when they cannot
   connect. The PID in the file is informational and can be used to
   detect this case if the product cares.

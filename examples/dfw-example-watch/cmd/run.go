@@ -4,13 +4,13 @@ import (
 	"image"
 	"io/fs"
 
-	"github.com/michaelquigley/dfw"
 	"github.com/michaelquigley/dfw/examples/dfw-example-watch/server"
 	"github.com/michaelquigley/dfw/examples/dfw-example-watch/watcher"
+	"github.com/michaelquigley/dfw/webview"
 	"github.com/spf13/cobra"
 )
 
-// NewRunCommand returns the single-process dfw.Run command.
+// NewRunCommand returns the single-process webview.Run command.
 func NewRunCommand(assets fs.FS) *cobra.Command {
 	var devTools bool
 
@@ -39,7 +39,7 @@ func NewRunCommand(assets fs.FS) *cobra.Command {
 				return err
 			}
 
-			return dfw.Run(dfw.App{
+			return webview.Run(webview.App{
 				AppID:       appID,
 				Title:       appTitle,
 				InitialSize: image.Pt(1100, 760),

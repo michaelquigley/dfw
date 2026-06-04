@@ -1,10 +1,12 @@
-package dfw
+package tray
 
 import (
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
+
+	"github.com/michaelquigley/dfw/internal/core"
 )
 
 // SpawnSelf returns a SpawnWindow function that launches the current binary
@@ -53,12 +55,12 @@ func buildCmdWithEnv(env []string, binary string, args []string, daemonAddr stri
 func withDaemonAddrEnv(env []string, daemonAddr string) []string {
 	next := make([]string, 0, len(env)+1)
 	for _, value := range env {
-		if envKey(value) == daemonAddrEnv {
+		if envKey(value) == core.DaemonAddrEnv {
 			continue
 		}
 		next = append(next, value)
 	}
-	return append(next, daemonAddrEnv+"="+daemonAddr)
+	return append(next, core.DaemonAddrEnv+"="+daemonAddr)
 }
 
 func envKey(value string) string {

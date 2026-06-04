@@ -1,10 +1,11 @@
-package dfw
+package tray
 
 import (
 	"fmt"
 
 	"fyne.io/systray"
 	"github.com/michaelquigley/df/dl"
+	"github.com/michaelquigley/dfw/internal/core"
 )
 
 type trayConfig struct {
@@ -103,7 +104,7 @@ func validateTrayIconPNG(iconPNG []byte) error {
 	if len(iconPNG) == 0 {
 		return nil
 	}
-	if _, err := decodeIconPNG(iconPNG); err != nil {
+	if _, err := core.DecodeIconPNG(iconPNG); err != nil {
 		return fmt.Errorf("dfw: tray icon: %w", err)
 	}
 	return nil

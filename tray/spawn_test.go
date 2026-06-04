@@ -1,4 +1,4 @@
-package dfw
+package tray
 
 import (
 	"path/filepath"

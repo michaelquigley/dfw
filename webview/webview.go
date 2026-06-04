@@ -1,4 +1,4 @@
-package dfw
+package webview
 
 import (
 	"errors"
@@ -8,6 +8,7 @@ import (
 	webview "centrifuge.hectabit.org/HectaBit/webview_go"
 
 	"github.com/michaelquigley/df/dl"
+	"github.com/michaelquigley/dfw/internal/core"
 )
 
 type webviewConfig struct {
@@ -43,12 +44,12 @@ func newConfiguredWebView(config webviewConfig) (*desktopWebView, error) {
 		window.SetTitle(config.Title)
 	}
 
-	state, hasState := loadWindowState(config.AppID)
-	size := chooseInitialWindowSize(config.InitialSize, state, hasState)
+	state, hasState := core.LoadWindowState(config.AppID)
+	size := core.ChooseInitialWindowSize(config.InitialSize, state, hasState)
 	if size.X > 0 && size.Y > 0 {
 		window.SetSize(size)
 	}
-	if x, y, ok := chooseInitialWindowLocation(state, hasState); ok {
+	if x, y, ok := core.ChooseInitialWindowLocation(state, hasState); ok {
 		applyNativeWindowLocation(w.Window(), x, y)
 	}
 	if err := window.SetIcon(config.IconPNG); err != nil {
@@ -85,7 +86,7 @@ func (w *desktopWebView) SaveWindowState() {
 		return
 	}
 
-	if _, err := writeWindowState(w.appID, windowStateFromBounds(bounds)); err != nil {
+	if _, err := core.WriteWindowState(w.appID, core.WindowStateFromBounds(bounds)); err != nil {
 		dl.Errorf("dfw: write window state: %v", err)
 	}
 }

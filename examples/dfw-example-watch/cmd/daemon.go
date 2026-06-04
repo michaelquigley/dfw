@@ -3,13 +3,13 @@ package cmd
 import (
 	"io/fs"
 
-	"github.com/michaelquigley/dfw"
 	"github.com/michaelquigley/dfw/examples/dfw-example-watch/server"
 	"github.com/michaelquigley/dfw/examples/dfw-example-watch/watcher"
+	"github.com/michaelquigley/dfw/tray"
 	"github.com/spf13/cobra"
 )
 
-// NewDaemonCommand returns the tray-resident dfw.Daemon command.
+// NewDaemonCommand returns the tray-resident tray.Daemon command.
 func NewDaemonCommand(assets fs.FS) *cobra.Command {
 	daemon := &cobra.Command{
 		Use:   "daemon [path]",
@@ -32,13 +32,13 @@ func NewDaemonCommand(assets fs.FS) *cobra.Command {
 				return err
 			}
 
-			return dfw.Daemon(dfw.DaemonApp{
+			return tray.Daemon(tray.DaemonApp{
 				AppID:       appID,
 				Title:       appTitle,
 				IconPNG:     icon,
 				Listen:      server.Listen(assets, watch),
-				SpawnWindow: dfw.SpawnSelf("window"),
-				TrayItems: []dfw.TrayMenuItem{
+				SpawnWindow: tray.SpawnSelf("window"),
+				TrayItems: []tray.TrayMenuItem{
 					{
 						Label:    "Watching " + watch.DisplayRoot(),
 						Tooltip:  watch.Root(),

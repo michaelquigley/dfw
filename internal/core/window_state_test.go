@@ -1,4 +1,4 @@
-package dfw
+package core
 
 import (
 	"encoding/json"
@@ -19,7 +19,7 @@ func TestWindowStateRoundTrip(t *testing.T) {
 	y := 80
 	expectedPath := filepath.Join(configDir, "com.example.app", "runtime", "window_state.json")
 
-	path, err := writeWindowState("com.example.app", windowState{
+	path, err := WriteWindowState("com.example.app", WindowState{
 		Width:  1024,
 		Height: 768,
 		X:      &x,
@@ -58,7 +58,7 @@ func TestWindowStateOmitsMissingLocation(t *testing.T) {
 	configDir := t.TempDir()
 	withUserConfigDir(t, configDir)
 
-	path, err := writeWindowState("com.example.app", windowState{
+	path, err := WriteWindowState("com.example.app", WindowState{
 		Width:  1024,
 		Height: 768,
 	})
@@ -79,7 +79,7 @@ func TestWindowStateMissingFileFallsBack(t *testing.T) {
 	state, ok, err := readWindowState("com.example.app")
 	require.NoError(t, err)
 	assert.False(t, ok)
-	assert.Equal(t, windowState{}, state)
+	assert.Equal(t, WindowState{}, state)
 }
 
 func TestWindowStateMalformedFileFallsBack(t *testing.T) {
@@ -91,9 +91,9 @@ func TestWindowStateMalformedFileFallsBack(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
 	require.NoError(t, os.WriteFile(path, []byte("{"), 0o600))
 
-	state, ok := loadWindowState("com.example.app")
+	state, ok := LoadWindowState("com.example.app")
 	assert.False(t, ok)
-	assert.Equal(t, windowState{}, state)
+	assert.Equal(t, WindowState{}, state)
 }
 
 func TestWindowStateInvalidSizeFallsBack(t *testing.T) {
@@ -108,7 +108,7 @@ func TestWindowStateInvalidSizeFallsBack(t *testing.T) {
 	state, ok, err := readWindowState("com.example.app")
 	require.NoError(t, err)
 	assert.False(t, ok)
-	assert.Equal(t, windowState{}, state)
+	assert.Equal(t, WindowState{}, state)
 }
 
 func TestWindowStatePathShape(t *testing.T) {
@@ -123,30 +123,30 @@ func TestWindowStatePathShape(t *testing.T) {
 func TestChooseInitialWindowSize(t *testing.T) {
 	initial := image.Pt(800, 600)
 
-	assert.Equal(t, initial, chooseInitialWindowSize(initial, windowState{}, false))
-	assert.Equal(t, initial, chooseInitialWindowSize(initial, windowState{Width: -1, Height: 700}, true))
-	assert.Equal(t, initial, chooseInitialWindowSize(initial, windowState{Width: 212, Height: 200}, true))
-	assert.Equal(t, image.Pt(1200, 900), chooseInitialWindowSize(initial, windowState{Width: 1200, Height: 900}, true))
+	assert.Equal(t, initial, ChooseInitialWindowSize(initial, WindowState{}, false))
+	assert.Equal(t, initial, ChooseInitialWindowSize(initial, WindowState{Width: -1, Height: 700}, true))
+	assert.Equal(t, initial, ChooseInitialWindowSize(initial, WindowState{Width: 212, Height: 200}, true))
+	assert.Equal(t, image.Pt(1200, 900), ChooseInitialWindowSize(initial, WindowState{Width: 1200, Height: 900}, true))
 }
 
 func TestChooseInitialWindowLocation(t *testing.T) {
 	x := 20
 	y := 40
 
-	_, _, ok := chooseInitialWindowLocation(windowState{}, false)
+	_, _, ok := ChooseInitialWindowLocation(WindowState{}, false)
 	assert.False(t, ok)
 
-	_, _, ok = chooseInitialWindowLocation(windowState{Width: 800, Height: 600, X: &x}, true)
+	_, _, ok = ChooseInitialWindowLocation(WindowState{Width: 800, Height: 600, X: &x}, true)
 	assert.False(t, ok)
 
-	actualX, actualY, ok := chooseInitialWindowLocation(windowState{Width: 800, Height: 600, X: &x, Y: &y}, true)
+	actualX, actualY, ok := ChooseInitialWindowLocation(WindowState{Width: 800, Height: 600, X: &x, Y: &y}, true)
 	require.True(t, ok)
 	assert.Equal(t, 20, actualX)
 	assert.Equal(t, 40, actualY)
 }
 
 func TestWindowStateFromBounds(t *testing.T) {
-	state := windowStateFromBounds(windowBounds{
+	state := WindowStateFromBounds(WindowBounds{
 		Width:       900,
 		Height:      700,
 		X:           11,

@@ -1,4 +1,4 @@
-package dfw
+package webview
 
 import (
 	"os"

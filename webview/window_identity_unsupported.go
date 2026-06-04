@@ -1,6 +1,6 @@
 //go:build !linux
 
-package dfw
+package webview
 
 import "unsafe"
 

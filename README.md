@@ -21,9 +21,12 @@ their distribution; `dfw` just gives the result a window.
 ## The Three Modes
 
 `dfw` exposes three entry points. Each is one function call from your
-product's `main`.
+product's `main`. They live in two subpackages — `dfw/webview` (`Run`,
+`Window`) and `dfw/tray` (`Daemon`) — so a tray-only product builds
+without the webview's native dependency. See
+[Architecture › Package Layout](docs/current/architecture.md#package-layout).
 
-### `dfw.Run` — single window, single process
+### `webview.Run` — single window, single process
 
 The HTTP server and the webview run in the same process. The window
 opens, navigates to the loopback address, and the function returns
@@ -33,7 +36,7 @@ when the user closes the window.
 | :---: | :---: |
 | ![dfw-example-watcher Tray/Daemon on Linux](docs/images/linux.png) | ![dfw-example-watcher Tray/Daemon on Linux](docs/images/windows.png) |
 
-### `dfw.Daemon` — tray-resident HTTP daemon
+### `tray.Daemon` — tray-resident HTTP daemon
 
 A long-running process owns the HTTP server and shows a system tray
 icon. Background work keeps running with the tray visible; opening a
@@ -43,10 +46,10 @@ window is a separate step.
 | :---: | :---: |
 | ![dfw-example-watcher Tray/Daemon on Linux](docs/images/linux-daemon.png) | ![dfw-example-watcher Tray/Daemon on Linux](docs/images/windows-daemon.png) |
 
-### `dfw.Window` — webview attached to a daemon
+### `webview.Window` — webview attached to a daemon
 
 A separate process that opens a webview pointing at a running daemon.
-Spawned by the daemon (via `dfw.SpawnSelf`, which re-executes the
+Spawned by the daemon (via `tray.SpawnSelf`, which re-executes the
 daemon's binary) or launched independently by the user. Multiple
 `Window` processes can attach to the same daemon.
 
@@ -60,11 +63,11 @@ import (
     "net"
     "net/http"
 
-    "github.com/michaelquigley/dfw"
+    "github.com/michaelquigley/dfw/webview"
 )
 
 func main() {
-    _ = dfw.Run(dfw.App{
+    _ = webview.Run(webview.App{
         AppID:       "com.example.hello",
         Title:       "Hello dfw",
         InitialSize: image.Pt(900, 600),
@@ -95,8 +98,9 @@ and the [example walkthrough](docs/current/example.md).
 | Windows | WebView2 | system tray | persisted |
 | macOS | deferred | deferred | not persisted |
 
-Building against `dfw` requires a CGO-capable toolchain plus the
-platform's native webview headers. See [docs/current/building.md](docs/current/building.md)
+Building the webview portion requires a CGO-capable toolchain plus the
+platform's native webview headers; a consumer that imports only `dfw/tray`
+builds without them. See [docs/current/building.md](docs/current/building.md)
 for distro-specific package names and the full build sequence.
 
 ## Status

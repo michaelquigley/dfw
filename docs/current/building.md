@@ -1,8 +1,14 @@
 # Building
 
-`dfw` is a CGO-using library. The Go side is unremarkable — `go build` and
-`go test` work as normal — but the webview binding pulls in a native
-toolchain on each platform.
+`dfw` uses CGO. The Go side is unremarkable — `go build` and `go test` work as
+normal — but the `webview` subpackage's binding pulls in a native toolchain on
+each platform.
+
+The `tray` subpackage does not. A consumer that imports only
+`github.com/michaelquigley/dfw/tray` builds without the webview binding, and so
+needs neither WebKitGTK (Linux) nor WebView2 (Windows) — only the system-tray
+toolchain. See [architecture.md](architecture.md#package-layout) for the import
+isolation that makes this work.
 
 ## Library
 

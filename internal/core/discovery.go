@@ -1,4 +1,4 @@
-package dfw
+package core
 
 import (
 	"errors"
@@ -11,8 +11,10 @@ import (
 	"github.com/michaelquigley/df/dd"
 )
 
+// DaemonAddrEnv is the environment variable a window process reads to discover
+// its daemon's HTTP address.
 const (
-	daemonAddrEnv = "DFW_DAEMON_ADDR"
+	DaemonAddrEnv = "DFW_DAEMON_ADDR"
 	runtimeDir    = "runtime"
 	daemonJSON    = "daemon.json"
 )
@@ -24,15 +26,18 @@ var (
 	userConfigDir = os.UserConfigDir
 )
 
-type daemonRuntime struct {
+// DaemonRuntime is the metadata a daemon writes for window discovery.
+type DaemonRuntime struct {
 	PID     int
 	Address string
 }
 
-func resolveDaemonAddr(appID string) (string, error) {
-	if addr, ok := os.LookupEnv(daemonAddrEnv); ok && addr != "" {
+// ResolveDaemonAddr resolves a daemon's address from DFW_DAEMON_ADDR or the
+// AppID-derived runtime file.
+func ResolveDaemonAddr(appID string) (string, error) {
+	if addr, ok := os.LookupEnv(DaemonAddrEnv); ok && addr != "" {
 		if err := validateDaemonAddr(addr); err != nil {
-			return "", fmt.Errorf("%w: %s: %v", errDaemonAddressMissing, daemonAddrEnv, err)
+			return "", fmt.Errorf("%w: %s: %v", errDaemonAddressMissing, DaemonAddrEnv, err)
 		}
 		return addr, nil
 	}
@@ -57,7 +62,9 @@ func validateDaemonAddr(addr string) error {
 	return nil
 }
 
-func writeDaemonRuntime(appID string, runtime daemonRuntime) (string, error) {
+// WriteDaemonRuntime writes the daemon runtime file for appID and returns its
+// path.
+func WriteDaemonRuntime(appID string, runtime DaemonRuntime) (string, error) {
 	path, err := daemonRuntimePath(appID)
 	if err != nil {
 		return "", err
@@ -77,15 +84,15 @@ func writeDaemonRuntime(appID string, runtime daemonRuntime) (string, error) {
 	return path, nil
 }
 
-func readDaemonRuntime(appID string) (daemonRuntime, error) {
+func readDaemonRuntime(appID string) (DaemonRuntime, error) {
 	path, err := daemonRuntimePath(appID)
 	if err != nil {
-		return daemonRuntime{}, err
+		return DaemonRuntime{}, err
 	}
 
-	runtime := daemonRuntime{}
+	runtime := DaemonRuntime{}
 	if err := dd.BindJSONFile(&runtime, path); err != nil {
-		return daemonRuntime{}, fmt.Errorf("dfw: bind daemon runtime: %w", err)
+		return DaemonRuntime{}, fmt.Errorf("dfw: bind daemon runtime: %w", err)
 	}
 
 	return runtime, nil

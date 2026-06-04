@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	"github.com/michaelquigley/dfw"
+	"github.com/michaelquigley/dfw/webview"
 	"github.com/spf13/cobra"
 )
 
-// NewWindowCommand returns the daemon-connected dfw.Window command.
+// NewWindowCommand returns the daemon-connected webview.Window command.
 func NewWindowCommand() *cobra.Command {
 	var devTools bool
 
@@ -22,7 +22,7 @@ func NewWindowCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return dfw.Window(app)
+			return webview.Window(app)
 		},
 	}
 	window.Flags().BoolVar(&devTools, "devtools", false, "enable webview developer tools")

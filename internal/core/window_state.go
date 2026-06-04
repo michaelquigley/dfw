@@ -1,4 +1,4 @@
-package dfw
+package core
 
 import (
 	"errors"
@@ -16,46 +16,51 @@ const windowStateJSON = "window_state.json"
 
 var minimumRestoredWindowSize = image.Pt(320, 240)
 
-type windowState struct {
+// WindowState is the persisted size and (optional) location of a window.
+type WindowState struct {
 	Width  int
 	Height int
 	X      *int
 	Y      *int
 }
 
-func loadWindowState(appID string) (windowState, bool) {
+// LoadWindowState reads the persisted window state for appID, returning false
+// when no usable state exists.
+func LoadWindowState(appID string) (WindowState, bool) {
 	if strings.TrimSpace(appID) == "" {
-		return windowState{}, false
+		return WindowState{}, false
 	}
 
 	state, ok, err := readWindowState(appID)
 	if err != nil {
 		dl.Errorf("dfw: read window state: %v", err)
-		return windowState{}, false
+		return WindowState{}, false
 	}
 	return state, ok
 }
 
-func readWindowState(appID string) (windowState, bool, error) {
+func readWindowState(appID string) (WindowState, bool, error) {
 	path, err := windowStatePath(appID)
 	if err != nil {
-		return windowState{}, false, err
+		return WindowState{}, false, err
 	}
 
-	state := windowState{}
+	state := WindowState{}
 	if err := dd.BindJSONFile(&state, path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return windowState{}, false, nil
+			return WindowState{}, false, nil
 		}
-		return windowState{}, false, fmt.Errorf("dfw: bind window state: %w", err)
+		return WindowState{}, false, fmt.Errorf("dfw: bind window state: %w", err)
 	}
 	if !state.validSize() {
-		return windowState{}, false, nil
+		return WindowState{}, false, nil
 	}
 	return state, true, nil
 }
 
-func writeWindowState(appID string, state windowState) (string, error) {
+// WriteWindowState persists state for appID and returns the file path. A state
+// with a non-positive size is ignored and returns an empty path.
+func WriteWindowState(appID string, state WindowState) (string, error) {
 	if !state.validSize() {
 		return "", nil
 	}
@@ -87,22 +92,26 @@ func windowStatePath(appID string) (string, error) {
 	return filepath.Join(base, runtimeDir, windowStateJSON), nil
 }
 
-func chooseInitialWindowSize(initial image.Point, state windowState, hasState bool) image.Point {
+// ChooseInitialWindowSize returns the size to open a window at, preferring a
+// restorable persisted size over the initial size.
+func ChooseInitialWindowSize(initial image.Point, state WindowState, hasState bool) image.Point {
 	if hasState && state.restorableSize(initial) {
 		return image.Pt(state.Width, state.Height)
 	}
 	return initial
 }
 
-func chooseInitialWindowLocation(state windowState, hasState bool) (int, int, bool) {
+// ChooseInitialWindowLocation returns the persisted window location, if any.
+func ChooseInitialWindowLocation(state WindowState, hasState bool) (int, int, bool) {
 	if !hasState || !state.hasLocation() {
 		return 0, 0, false
 	}
 	return *state.X, *state.Y, true
 }
 
-func windowStateFromBounds(bounds windowBounds) windowState {
-	state := windowState{
+// WindowStateFromBounds converts a native bounds snapshot into a WindowState.
+func WindowStateFromBounds(bounds WindowBounds) WindowState {
+	state := WindowState{
 		Width:  bounds.Width,
 		Height: bounds.Height,
 	}
@@ -115,11 +124,11 @@ func windowStateFromBounds(bounds windowBounds) windowState {
 	return state
 }
 
-func (s windowState) validSize() bool {
+func (s WindowState) validSize() bool {
 	return s.Width > 0 && s.Height > 0
 }
 
-func (s windowState) restorableSize(initial image.Point) bool {
+func (s WindowState) restorableSize(initial image.Point) bool {
 	if !s.validSize() {
 		return false
 	}
@@ -135,6 +144,6 @@ func (s windowState) restorableSize(initial image.Point) bool {
 	return s.Width >= minimum.X && s.Height >= minimum.Y
 }
 
-func (s windowState) hasLocation() bool {
+func (s WindowState) hasLocation() bool {
 	return s.X != nil && s.Y != nil
 }

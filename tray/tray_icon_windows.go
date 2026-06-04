@@ -1,15 +1,17 @@
 //go:build windows
 
-package dfw
+package tray
 
 import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+
+	"github.com/michaelquigley/dfw/internal/core"
 )
 
 func trayIconBytes(iconPNG []byte) ([]byte, error) {
-	icon, err := decodeIconPNG(iconPNG)
+	icon, err := core.DecodeIconPNG(iconPNG)
 	if err != nil {
 		return nil, fmt.Errorf("dfw: tray icon: %w", err)
 	}

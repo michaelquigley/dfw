@@ -5,20 +5,43 @@ ship a UI framework, a JavaScript-to-Go bridge, a request proxy, or any kind
 of distribution tooling. The product owns its HTTP API and its web UI; `dfw`
 only owns the process, window, and tray lifecycle around them.
 
-The library exposes three entry points. Each is a single function call from
-the product's `main`; the function blocks until the user-facing lifecycle
-completes.
+The library exposes three entry points across two consumable subpackages. Each
+is a single function call from the product's `main`; the function blocks until
+the user-facing lifecycle completes.
+
+## Package Layout
+
+`dfw` is split so a product can consume the tray/daemon portion without pulling
+the webview's native dependency:
+
+- **`github.com/michaelquigley/dfw/tray`** — the tray-resident daemon
+  (`tray.Daemon`, plus `tray.SpawnSelf` / `tray.Spawn`). Depends on
+  `fyne.io/systray` only.
+- **`github.com/michaelquigley/dfw/webview`** — the desktop window entry points
+  (`webview.Run`, `webview.Window`, and `webview.DevToolsEnabled`). Depends on
+  the CGO webview binding (WebKitGTK / WebView2).
+- **`github.com/michaelquigley/dfw/internal/core`** — shared HTTP-server
+  supervision, daemon discovery, icon decoding, and window-state persistence.
+  Pure Go, no CGO; imported by both subpackages, not by consumers.
+
+Because Go resolves dependencies per package, the `tray` package's transitive
+imports never include the webview binding. A consumer that imports only
+`dfw/tray` therefore builds **without** WebKitGTK/WebView2 — the binding is
+never compiled, and Go's module-graph pruning keeps it out of the consumer's
+module graph entirely. The two heavy native dependencies are fully isolated:
+the tray build never pulls the webview binding, and the webview build never
+pulls `systray`.
 
 ## The Three Entry Points
 
-### `dfw.Run(App)`
+### `webview.Run(App)`
 
 One process. The HTTP server and the webview window run together, navigation
 points at the listener's loopback address, and the function returns when the
 user closes the window. Use this for a single-window desktop application
 where the server and window live and die together.
 
-### `dfw.Daemon(DaemonApp)`
+### `tray.Daemon(DaemonApp)`
 
 A tray-resident process. Owns the HTTP server and any background work,
 writes a `daemon.json` runtime file so window clients can discover its
@@ -27,7 +50,7 @@ the daemon is shut down via the tray menu (or on fatal error). The daemon
 itself does not open a window — it relies on a separate `Window` process for
 that.
 
-### `dfw.Window(WindowApp)`
+### `webview.Window(WindowApp)`
 
 A webview-only process that connects to a running daemon. Resolves the
 daemon address from `DFW_DAEMON_ADDR` (falling back to the `daemon.json`
@@ -58,7 +81,7 @@ flowchart LR
     end
 ```
 
-Window processes can be spawned by the daemon (typically via `dfw.SpawnSelf`,
+Window processes can be spawned by the daemon (typically via `tray.SpawnSelf`,
 which re-executes the daemon's own binary with the appropriate subcommand and
 the `DFW_DAEMON_ADDR` environment variable populated), or launched
 independently by the user — in which case the runtime file provides

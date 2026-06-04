@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/michaelquigley/dfw"
+	"github.com/michaelquigley/dfw/webview"
 )
 
 const (
@@ -74,12 +74,12 @@ func generateAppIconPNG(size int) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func windowApp() (dfw.WindowApp, error) {
+func windowApp() (webview.WindowApp, error) {
 	icon, err := appIconPNG()
 	if err != nil {
-		return dfw.WindowApp{}, err
+		return webview.WindowApp{}, err
 	}
-	return dfw.WindowApp{
+	return webview.WindowApp{
 		AppID:       appID,
 		Title:       appTitle,
 		InitialSize: image.Pt(1100, 760),
