@@ -16,12 +16,13 @@ const windowStateJSON = "window_state.json"
 
 var minimumRestoredWindowSize = image.Pt(320, 240)
 
-// WindowState is the persisted size and (optional) location of a window.
+// WindowState is the persisted size, optional location, and optional page zoom of a window.
 type WindowState struct {
-	Width  int
-	Height int
-	X      *int
-	Y      *int
+	Width       int
+	Height      int
+	X           *int
+	Y           *int
+	ZoomPercent *int
 }
 
 // LoadWindowState reads the persisted window state for appID, returning false
@@ -146,4 +147,16 @@ func (s WindowState) restorableSize(initial image.Point) bool {
 
 func (s WindowState) hasLocation() bool {
 	return s.X != nil && s.Y != nil
+}
+
+// ChooseInitialWindowZoom restores a supported zoom step, defaulting old or
+// invalid preferences to 100 percent.
+func ChooseInitialWindowZoom(state WindowState, hasState bool) int {
+	if hasState && state.ZoomPercent != nil {
+		percent := *state.ZoomPercent
+		if percent >= 50 && percent <= 200 && percent%10 == 0 {
+			return percent
+		}
+	}
+	return 100
 }

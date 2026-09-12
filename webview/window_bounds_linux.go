@@ -79,19 +79,9 @@ static gboolean dfw_linux_configure_event(GtkWidget *widget, GdkEvent *event, gp
 		return FALSE;
 	}
 
-	if (event != NULL && event->type == GDK_CONFIGURE) {
-		GdkEventConfigure *configure = (GdkEventConfigure *)event;
-		if (configure->width > 0 && configure->height > 0) {
-			tracker->width = configure->width;
-			tracker->height = configure->height;
-			tracker->has_bounds = 1;
-		}
-		if (tracker->location_supported) {
-			tracker->x = configure->x;
-			tracker->y = configure->y;
-			tracker->has_location = 1;
-		}
-	}
+	// Event dimensions include client-side decorations. The logical GTK size
+	// is what set_default_size/resize expect on the next launch.
+	dfw_linux_update_window_bounds(tracker);
 
 	return FALSE;
 }

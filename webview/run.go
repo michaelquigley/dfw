@@ -34,6 +34,7 @@ func Run(app App) (err error) {
 		InitialSize: app.InitialSize,
 		IconPNG:     app.IconPNG,
 		Debug:       DevToolsEnabled(),
+		EnableZoom:  app.EnableZoom,
 	})
 	if err != nil {
 		return err

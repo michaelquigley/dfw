@@ -17,6 +17,7 @@ func Window(app WindowApp) error {
 		InitialSize: app.InitialSize,
 		IconPNG:     app.IconPNG,
 		Debug:       DevToolsEnabled(),
+		EnableZoom:  app.EnableZoom,
 	})
 	if err != nil {
 		return err

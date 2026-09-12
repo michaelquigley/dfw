@@ -16,6 +16,8 @@ type App struct {
 	InitialSize image.Point
 	// IconPNG is the window/app icon as PNG bytes.
 	IconPNG []byte
+	// EnableZoom enables remembered page zoom and standard keyboard shortcuts on Linux.
+	EnableZoom bool
 	// Listen returns an unstarted server and open listener for dfw to own.
 	Listen func() (*http.Server, net.Listener, error)
 }
@@ -30,4 +32,6 @@ type WindowApp struct {
 	InitialSize image.Point
 	// IconPNG is the window/app icon as PNG bytes.
 	IconPNG []byte
+	// EnableZoom enables remembered page zoom and standard keyboard shortcuts on Linux.
+	EnableZoom bool
 }

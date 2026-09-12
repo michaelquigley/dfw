@@ -17,12 +17,15 @@ type webviewConfig struct {
 	InitialSize image.Point
 	IconPNG     []byte
 	Debug       bool
+	EnableZoom  bool
 }
 
 type desktopWebView struct {
 	w             webview.WebView
 	appID         string
 	boundsTracker nativeWindowBoundsTracker
+	zoom          nativeZoomController
+	savedZoom     *int
 }
 
 func newConfiguredWebView(config webviewConfig) (*desktopWebView, error) {
@@ -45,6 +48,10 @@ func newConfiguredWebView(config webviewConfig) (*desktopWebView, error) {
 	}
 
 	state, hasState := core.LoadWindowState(config.AppID)
+	window.savedZoom = state.ZoomPercent
+	if config.EnableZoom {
+		window.zoom = newNativeZoom(w.Window(), core.ChooseInitialWindowZoom(state, hasState))
+	}
 	size := core.ChooseInitialWindowSize(config.InitialSize, state, hasState)
 	if size.X > 0 && size.Y > 0 {
 		window.SetSize(size)
@@ -61,6 +68,10 @@ func newConfiguredWebView(config webviewConfig) (*desktopWebView, error) {
 }
 
 func (w *desktopWebView) Destroy() {
+	if w.zoom != nil {
+		w.zoom.Close()
+		w.zoom = nil
+	}
 	if w.boundsTracker != nil {
 		w.boundsTracker.Close()
 		w.boundsTracker = nil
@@ -86,7 +97,13 @@ func (w *desktopWebView) SaveWindowState() {
 		return
 	}
 
-	if _, err := core.WriteWindowState(w.appID, core.WindowStateFromBounds(bounds)); err != nil {
+	state := core.WindowStateFromBounds(bounds)
+	state.ZoomPercent = w.savedZoom
+	if w.zoom != nil {
+		percent := w.zoom.Percent()
+		state.ZoomPercent = &percent
+	}
+	if _, err := core.WriteWindowState(w.appID, state); err != nil {
 		dl.Errorf("dfw: write window state: %v", err)
 	}
 }
