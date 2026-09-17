@@ -145,7 +145,9 @@ func (s *Server) assetExists(name string) (bool, error) {
 		}
 		return false, err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	info, err := file.Stat()
 	if err != nil {

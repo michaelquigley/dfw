@@ -32,7 +32,9 @@ func NewRunCommand(assets fs.FS) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer watch.Close()
+			defer func() {
+				_ = watch.Close()
+			}()
 
 			icon, err := appIconPNG()
 			if err != nil {

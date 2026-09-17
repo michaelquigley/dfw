@@ -15,7 +15,9 @@ import (
 func TestAPIStatus(t *testing.T) {
 	watch, err := watcher.New(t.TempDir())
 	require.NoError(t, err)
-	defer watch.Close()
+	defer func() {
+		require.NoError(t, watch.Close())
+	}()
 
 	handler := NewHandler(testAssets(), watch)
 	recorder := httptest.NewRecorder()
