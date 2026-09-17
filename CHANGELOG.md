@@ -6,7 +6,6 @@
 
 CHANGE: GitHub Actions now builds the example frontend and installs dfw's Linux native dependencies before running the full race-enabled Go suite with coverage and a separate `golangci-lint` job on every push and pull request.
 
-
 FEATURE: Applications can intercept native window-close requests on Linux and Windows by setting `OnCloseRequest` on `webview.App` or `webview.WindowApp`. Each one-shot `CloseRequest` remains pending until the product calls `Close` or `KeepOpen`; repeated native closes are dropped, while transport and save/discard policy stay product-owned.
 
 FIX: A supervised server failure that arrives before the webview's UI loop is ready now remains latched and terminates through the UI thread instead of being dropped or targeting a stopped window.
