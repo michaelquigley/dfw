@@ -15,6 +15,12 @@ go test ./...
 
 No additional setup beyond the platform prerequisites below.
 
+## Continuous Integration
+
+GitHub Actions runs on every push and pull request. The test job installs the Linux GTK and WebKitGTK development packages, builds the ignored React bundle used by `dfw-example-watch`, runs the ordinary `make test` gate, then repeats the complete Go suite under the race detector with coverage. A separate lint job prepares the same native and frontend inputs before running `golangci-lint`.
+
+The hosted gate exercises the Linux native build. Windows remains a real-platform check: before a release, build and run the native fixtures on Windows as described by their READMEs.
+
 ## Linux
 
 The webview is WebKitGTK 4.1 inside a GTK 3 window. The tray uses the DBus StatusNotifier / AppIndicator protocol, so the desktop session needs a tray host that speaks one of those (GNOME Shell with the AppIndicator extension, KDE Plasma's stock tray, XFCE's `xfce4-statusnotifier-plugin`, etc. — most modern Linux desktops include one).

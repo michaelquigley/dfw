@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: examples/dfw-example-watch/web/package-lock.json
+
+      - name: Build example frontend
+        run: |
+          npm --prefix examples/dfw-example-watch/web ci
+          npm --prefix examples/dfw-example-watch/web run build
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - run: go mod download
+      - run: make test
+      - run: go test -v -race -coverprofile=coverage.out ./...
+
+      - uses: codecov/codecov-action@v5
+        with:
+          files: coverage.out
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: examples/dfw-example-watch/web/package-lock.json
+
+      - name: Build example frontend
+        run: |
+          npm --prefix examples/dfw-example-watch/web ci
+          npm --prefix examples/dfw-example-watch/web run build
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
