@@ -25,17 +25,17 @@ type linuxCloseInterceptor struct {
 
 func newNativeCloseInterceptor(window unsafe.Pointer, request func() bool) (nativeCloseInterceptor, error) {
 	if !validNativeWindow(window) {
-		return nil, errors.New("dfw: install close interceptor: no native window")
+		return nil, errors.New("dfw: install close interceptor on 'linux': no native window")
 	}
 	if request == nil {
-		return nil, errors.New("dfw: install close interceptor: no request handler")
+		return nil, errors.New("dfw: install close interceptor on 'linux': no request handler")
 	}
 
 	handle := cgo.NewHandle(request)
 	interceptor := C.dfw_close_interceptor_install((*C.GtkWindow)(window), C.uintptr_t(handle))
 	if interceptor == nil {
 		handle.Delete()
-		return nil, errors.New("dfw: install close interceptor: connect GTK delete-event")
+		return nil, errors.New("dfw: install close interceptor on 'linux': connect GTK delete-event")
 	}
 	return &linuxCloseInterceptor{interceptor: interceptor, handle: handle}, nil
 }

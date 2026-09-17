@@ -39,6 +39,22 @@ Set `EnableZoom: true` in `webview.App` or `webview.WindowApp` to enable the Lin
 
 The zoom level is saved with the window's bounds on normal close and restored by AppID. Multiple windows retain the existing last-close-wins preference behavior. Zoom is opt-in so existing applications keep their keyboard behavior. The option currently has no effect outside Linux.
 
+## Close Requests
+
+Set `OnCloseRequest` on `webview.App` or `webview.WindowApp` to intercept the window manager's close request: the title-bar close control, the platform's close shortcut, and equivalent native messages. With the callback set, dfw consumes the native event first, then invokes the callback on its own goroutine with a `*webview.CloseRequest`. The window stays open until the product resolves the request.
+
+- `Close()` grants the close. The webview loop terminates and the entry point returns through its ordinary path: window state is saved, the window is destroyed, and `Run` shuts its server down.
+- `KeepOpen()` declines the close and rearms interception. The next native close creates a new request and invokes the callback again.
+- Returning from the callback without resolving leaves the request pending. There is no timeout.
+
+One request is pending at a time. Further native close requests while it is pending are consumed and dropped: they do not invoke the callback again, queue anything, or force the close. Both methods are safe from any goroutine. The first resolution wins; later calls, calls on a request that a newer request has superseded, and calls after the window has ended do nothing. Operating-system process controls remain the escape from a product that never answers.
+
+The veto covers native close requests only. dfw's own termination paths bypass it: a supervised server failure in `Run` still terminates the window immediately and returns the serve error, and window teardown never appears as a new close request. A window closed through an accepted request saves its state as usual; a vetoed close saves nothing.
+
+Supported on Linux (GTK `delete-event`) and Windows (`WM_CLOSE` through the window procedure dfw already installs for bounds tracking). Setting the callback on any other platform, or on a window where the native hook cannot be installed, makes `Run` or `Window` return an error rather than open a window without the promised interception. A nil callback keeps the previous close behavior everywhere.
+
+Both platforms were exercised against a real window with `examples/dfw-example-close` on 2026-09-17: Windows through the title-bar control, Linux through the title-bar control under Wayland and through synthesized `WM_DELETE_WINDOW` requests under XWayland.
+
 ## Daemon Discovery
 
 `tray.Daemon` writes `{user_config_dir}/{AppID}/runtime/daemon.json` on startup and removes it on clean shutdown. 0600 mode, JSON-encoded.
@@ -98,11 +114,11 @@ On GNOME, the running-app panel/dock icon is matched through desktop identity, n
 
 ## Failure Behavior
 
-- If the HTTP server's `Serve()` returns an error after startup, the serve supervisor records the error and signals the front end to exit: for `Run`, it calls `window.Terminate()`; for `Daemon`, it closes the tray-stop channel. Either way the entry-point function returns with the recorded error.
+- If the HTTP server's `Serve()` returns an error after startup, the serve supervisor records the error and signals the front end to exit: for `Run`, it requests termination through the window's UI thread, and a failure that arrives while the window is still being constructed stays latched so the loop is never entered; for `Daemon`, it closes the tray-stop channel. Either way the entry-point function returns with the recorded error. A pending close request is abandoned by internal termination; resolving it afterwards does nothing.
 - If `Run` or `Daemon` exit cleanly, `Serve()` is shut down via `server.Shutdown(ctx)` with a 5-second timeout, falling back to `server.Close()` on timeout.
 - `daemon.json` is removed on clean shutdown only. A daemon killed with `SIGKILL` leaves a stale file; subsequent `webview.Window` launches read the stale address and fail at the HTTP layer when they cannot connect. The PID in the file is informational and can be used to detect this case if the product cares.
 
 ## Related
 
 - [architecture.md](architecture.md) — the three entry points and the HTTP boundary that frames everything here.
-- [example.md](example.md) — `dfw-example-watch` exercises every feature on this page.
+- [example.md](example.md) — `dfw-example-watch` exercises the topology, discovery, and tray behavior on this page; `dfw-example-close` is the close-request fixture.

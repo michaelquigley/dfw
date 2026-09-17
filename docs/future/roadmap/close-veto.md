@@ -1,12 +1,14 @@
 ---
 title: close veto
-state: researching
+state: evaluating
 created: 2026-09-16
 tags: [feature]
 milestone: v0.1.x
 log:
   - stamp: 2026-09-16
-    note: spec drawn — docs/future/close-veto.md
+    note: spec drawn; realized 2026-09-17 and synthesized into docs/current/runtime.md#close-requests
+  - stamp: 2026-09-17
+    note: landed and exercised on Linux and Windows; evaluating for product adoption and soak
 ---
 
 Let an application answer the window manager's close request instead of being told about it afterwards. Today `webview.Run` returns when the window closes, `SaveWindowState` runs, and the process exits; there is no point at which the application can say "not yet" or "not at all". `webview.App` carries the identifier, title, size, icon, zoom flag, and listen function, and nothing else observes the window's lifetime.

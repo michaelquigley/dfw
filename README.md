@@ -6,31 +6,17 @@
 
 
 
-`dfw` is a small Go library that wraps an HTTP server and a webview
-window into a single desktop application. You bring the server and the
-web UI; `dfw` provides the process, the window, and — if you want
-it — a system tray daemon to keep the server resident between window
-sessions.
+`dfw` is a small Go library that wraps an HTTP server and a webview window into a single desktop application. You bring the server and the web UI; `dfw` provides the process, the window, and — if you want it — a system tray daemon to keep the server resident between window sessions.
 
-It is intentionally narrow. The library does not ship a UI framework,
-a JavaScript-to-Go bridge, a request proxy, native file dialogs, a
-native menu bar, single-instance enforcement, or packaging tooling.
-Products own their HTTP API, their web UI, their background work, and
-their distribution; `dfw` just gives the result a window.
+It is intentionally narrow. The library does not ship a UI framework, a JavaScript-to-Go bridge, a request proxy, native file dialogs, a native menu bar, single-instance enforcement, or packaging tooling. Products own their HTTP API, their web UI, their background work, and their distribution; `dfw` just gives the result a window.
 
 ## The Three Modes
 
-`dfw` exposes three entry points. Each is one function call from your
-product's `main`. They live in two subpackages — `dfw/webview` (`Run`,
-`Window`) and `dfw/tray` (`Daemon`) — so a tray-only product builds
-without the webview's native dependency. See
-[Architecture › Package Layout](docs/current/architecture.md#package-layout).
+`dfw` exposes three entry points. Each is one function call from your product's `main`. They live in two subpackages — `dfw/webview` (`Run`, `Window`) and `dfw/tray` (`Daemon`) — so a tray-only product builds without the webview's native dependency. See [Architecture › Package Layout](docs/current/architecture.md#package-layout).
 
 ### `webview.Run` — single window, single process
 
-The HTTP server and the webview run in the same process. The window
-opens, navigates to the loopback address, and the function returns
-when the user closes the window.
+The HTTP server and the webview run in the same process. The window opens, navigates to the loopback address, and the function returns when the user closes the window.
 
 | Linux | Windows |
 | :---: | :---: |
@@ -38,9 +24,7 @@ when the user closes the window.
 
 ### `tray.Daemon` — tray-resident HTTP daemon
 
-A long-running process owns the HTTP server and shows a system tray
-icon. Background work keeps running with the tray visible; opening a
-window is a separate step.
+A long-running process owns the HTTP server and shows a system tray icon. Background work keeps running with the tray visible; opening a window is a separate step.
 
 | Linux | Windows |
 | :---: | :---: |
@@ -48,10 +32,7 @@ window is a separate step.
 
 ### `webview.Window` — webview attached to a daemon
 
-A separate process that opens a webview pointing at a running daemon.
-Spawned by the daemon (via `tray.SpawnSelf`, which re-executes the
-daemon's binary) or launched independently by the user. Multiple
-`Window` processes can attach to the same daemon.
+A separate process that opens a webview pointing at a running daemon. Spawned by the daemon (via `tray.SpawnSelf`, which re-executes the daemon's binary) or launched independently by the user. Multiple `Window` processes can attach to the same daemon.
 
 ## Minimal Usage
 
@@ -86,42 +67,30 @@ func main() {
 }
 ```
 
-For a complete product — embedded React UI, filesystem watcher,
-daemon + window split — see [`examples/dfw-example-watch`](examples/dfw-example-watch)
-and the [example walkthrough](docs/current/example.md).
+For a complete product — embedded React UI, filesystem watcher, daemon + window split — see [`examples/dfw-example-watch`](examples/dfw-example-watch) and the [example walkthrough](docs/current/example.md).
+
+To be asked before the window closes, set `OnCloseRequest` on `App` or `WindowApp`. The window stays open until the product calls `Close` or `KeepOpen` on the delivered request, and the product carries that decision to its page over its own API. [`examples/dfw-example-close`](examples/dfw-example-close) is the small fixture for that lifecycle; the contract is in [Runtime › Close Requests](docs/current/runtime.md#close-requests).
 
 ## Platform Support
 
-| Platform | Webview | Tray | Window position |
-| :--- | :--- | :--- | :--- |
-| Linux | WebKitGTK 4.1 | StatusNotifier / AppIndicator | persisted |
-| Windows | WebView2 | system tray | persisted |
-| macOS | deferred | deferred | not persisted |
+| Platform | Webview | Tray | Window position | Close request |
+| :--- | :--- | :--- | :--- | :--- |
+| Linux | WebKitGTK 4.1 | StatusNotifier / AppIndicator | persisted | intercepted |
+| Windows | WebView2 | system tray | persisted | intercepted |
+| macOS | deferred | deferred | not persisted | opt-in fails |
 
-Building the webview portion requires a CGO-capable toolchain plus the
-platform's native webview headers; a consumer that imports only `dfw/tray`
-builds without them. See [docs/current/building.md](docs/current/building.md)
-for distro-specific package names and the full build sequence.
+Building the webview portion requires a CGO-capable toolchain plus the platform's native webview headers; a consumer that imports only `dfw/tray` builds without them. See [docs/current/building.md](docs/current/building.md) for distro-specific package names and the full build sequence.
 
 ## Status
 
-Initial implementation. The library is feature-complete for the v1
-scope on Linux and Windows. macOS is deferred until the webview and
-window-position integrations are exercised; the unsupported build
-tags keep the library compiling on macOS but window position is not
-persisted.
+Initial implementation. The library is feature-complete for the v1 scope on Linux and Windows. macOS is deferred until the webview and window-position integrations are exercised; the unsupported build tags keep the library compiling on macOS but window position is not persisted.
 
 ## Documentation
 
-- [Architecture](docs/current/architecture.md) — the three entry
-  points, the process topology, and why the HTTP server is the system
-  boundary.
-- [Building](docs/current/building.md) — toolchain, distro packages,
-  Windows subsystem, the example's React bundle prerequisite.
-- [Runtime](docs/current/runtime.md) — on-disk state, environment
-  variables, daemon discovery, devtools, the tray menu shape.
-- [Example walkthrough](docs/current/example.md) — `dfw-example-watch`
-  end to end.
+- [Architecture](docs/current/architecture.md) — the three entry points, the process topology, and why the HTTP server is the system boundary.
+- [Building](docs/current/building.md) — toolchain, distro packages, Windows subsystem, the example's React bundle prerequisite.
+- [Runtime](docs/current/runtime.md) — on-disk state, environment variables, close requests, daemon discovery, devtools, the tray menu shape.
+- [Example walkthrough](docs/current/example.md) — `dfw-example-watch` end to end.
 
 ## Quick Build
 
@@ -138,8 +107,7 @@ pnpm install
 pnpm build
 ```
 
-Full build instructions, including platform prerequisites, live in
-[docs/current/building.md](docs/current/building.md).
+Full build instructions, including platform prerequisites, live in [docs/current/building.md](docs/current/building.md).
 
 ## License
 

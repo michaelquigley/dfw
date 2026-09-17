@@ -1,6 +1,6 @@
 # dfw-example-close
 
-`dfw-example-close` is the manual fixture for the native close request lifecycle. It is deliberately small: one Go file, an inline page, and no frontend toolchain. It exists to exercise `OnCloseRequest` against a real window. Linux is supported now; Windows follows in the next stage of the close-veto work, and until then a configured callback fails window setup there rather than opening an unprotected window.
+`dfw-example-close` is the manual fixture for the native close request lifecycle. It is deliberately small: one Go file, an inline page, and no frontend toolchain. It exists to exercise `OnCloseRequest` against a real window on Linux and Windows; the sequence below has been run on both.
 
 The page polls `/api/status` and shows whether a close request is `idle` or `pending` and how many requests have been delivered. While a request is pending it shows two buttons, `Keep open` and `Close`, whose POST handlers resolve the request. Nothing resolves automatically and there is no timeout.
 

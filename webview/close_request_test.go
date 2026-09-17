@@ -2,6 +2,7 @@ package webview
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -234,19 +235,131 @@ func TestCloseRequestNilAndZeroValueAreInert(t *testing.T) {
 	zero.KeepOpen()
 }
 
-func TestCloseRequestEndRacesResolution(t *testing.T) {
-	for _, resolve := range []struct {
-		name string
-		fn   func(*CloseRequest)
-	}{
-		{name: "close", fn: (*CloseRequest).Close},
-		{name: "keep open", fn: (*CloseRequest).KeepOpen},
-	} {
+// lifecycleCloseState is a deterministic snapshot of a closeController taken
+// under its mutex, so ordering tests assert state instead of inferring it
+// from timing.
+type lifecycleCloseState struct {
+	ended      bool
+	closing    bool
+	pending    uint64
+	generation uint64
+}
+
+func snapshotCloseController(c *closeController) lifecycleCloseState {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return lifecycleCloseState{ended: c.ended, closing: c.closing, pending: c.pending, generation: c.generation}
+}
+
+// newCountingCloseController returns a controller whose callback delivers the
+// request on a channel without blocking and whose terminate function counts
+// synchronously. terminate runs inside Close before it returns, so the count
+// is final as soon as the resolving call returns.
+func newCountingCloseController() (*closeController, chan *CloseRequest, *atomic.Int32) {
+	delivered := make(chan *CloseRequest, 16)
+	var terminated atomic.Int32
+	controller := newCloseController(func(request *CloseRequest) {
+		delivered <- request
+	}, func() {
+		terminated.Add(1)
+	})
+	return controller, delivered, &terminated
+}
+
+func deliverCloseRequest(t *testing.T, controller *closeController, delivered chan *CloseRequest) *CloseRequest {
+	t.Helper()
+	require.True(t, controller.requestClose(), "native request must be consumed")
+	select {
+	case request := <-delivered:
+		return request
+	case <-time.After(closeTestWait):
+		t.Fatal("callback was not dispatched")
+		return nil
+	}
+}
+
+// assertLifecycleEnded proves the shared invariants every ordering must reach:
+// the controller is ended with no pending generation, and a later native
+// request neither consumes the event nor allocates a generation, which is the
+// only way the callback could be reached.
+func assertLifecycleEnded(t *testing.T, controller *closeController, terminated *atomic.Int32, wantTerminations int32) {
+	t.Helper()
+	before := snapshotCloseController(controller)
+	assert.True(t, before.ended, "controller must be ended")
+	assert.Zero(t, before.pending, "no pending generation may survive end")
+	assert.Equal(t, wantTerminations, terminated.Load())
+
+	assert.False(t, controller.requestClose(), "native close proceeds after the lifecycle ends")
+	after := snapshotCloseController(controller)
+	assert.Equal(t, before.generation, after.generation, "an ended controller must not allocate a request")
+	assert.Zero(t, after.pending)
+	assert.Equal(t, wantTerminations, terminated.Load())
+}
+
+var closeResolutions = []struct {
+	name string
+	fn   func(*CloseRequest)
+}{
+	{name: "close", fn: (*CloseRequest).Close},
+	{name: "keep open", fn: (*CloseRequest).KeepOpen},
+}
+
+func TestCloseRequestEndBeforeResolutionMakesRequestInert(t *testing.T) {
+	for _, resolve := range closeResolutions {
 		t.Run(resolve.name, func(t *testing.T) {
-			for _, endFirst := range []bool{true, false} {
-				h := newCloseTestHarness(t)
-				close(h.release)
-				request := h.request(t)
+			controller, delivered, terminated := newCountingCloseController()
+			request := deliverCloseRequest(t, controller, delivered)
+
+			controller.end()
+			resolve.fn(request)
+			resolve.fn(request)
+
+			state := snapshotCloseController(controller)
+			assert.False(t, state.closing, "a resolution after end must not start closing")
+			assertLifecycleEnded(t, controller, terminated, 0)
+		})
+	}
+}
+
+func TestCloseRequestCloseBeforeEndTerminatesOnce(t *testing.T) {
+	controller, delivered, terminated := newCountingCloseController()
+	request := deliverCloseRequest(t, controller, delivered)
+
+	request.Close()
+	require.Equal(t, int32(1), terminated.Load(), "close terminates synchronously, exactly once")
+	assert.True(t, snapshotCloseController(controller).closing)
+
+	controller.end()
+	request.Close()
+	request.KeepOpen()
+	assertLifecycleEnded(t, controller, terminated, 1)
+}
+
+func TestCloseRequestKeepOpenBeforeEndDoesNotTerminate(t *testing.T) {
+	controller, delivered, terminated := newCountingCloseController()
+	request := deliverCloseRequest(t, controller, delivered)
+
+	request.KeepOpen()
+	state := snapshotCloseController(controller)
+	assert.Zero(t, state.pending, "keep open returns the controller to idle")
+	assert.False(t, state.closing)
+	assert.Zero(t, terminated.Load())
+
+	controller.end()
+	request.Close()
+	assertLifecycleEnded(t, controller, terminated, 0)
+}
+
+// TestCloseRequestEndRacesResolution releases lifecycle end and a resolution
+// together and checks only the invariants that hold whichever one the
+// scheduler runs first. it does not claim to control the ordering; the
+// deterministic cases above do that.
+func TestCloseRequestEndRacesResolution(t *testing.T) {
+	for _, resolve := range closeResolutions {
+		t.Run(resolve.name, func(t *testing.T) {
+			for i := 0; i < 200; i++ {
+				controller, delivered, terminated := newCountingCloseController()
+				request := deliverCloseRequest(t, controller, delivered)
 
 				var barrier sync.WaitGroup
 				barrier.Add(2)
@@ -256,32 +369,25 @@ func TestCloseRequestEndRacesResolution(t *testing.T) {
 					defer wg.Done()
 					barrier.Done()
 					barrier.Wait()
-					if endFirst {
-						h.controller.end()
-					} else {
-						resolve.fn(request)
-					}
+					controller.end()
 				}()
 				go func() {
 					defer wg.Done()
 					barrier.Done()
 					barrier.Wait()
-					if endFirst {
-						resolve.fn(request)
-					} else {
-						h.controller.end()
-					}
+					resolve.fn(request)
 				}()
 				wg.Wait()
 
-				// whichever ordering won, the controller is ended and no later
-				// native request can reach the callback.
-				assert.False(t, h.controller.requestClose())
-				h.assertNoDelivery(t)
-				select {
-				case <-h.terminated:
-				case <-time.After(50 * time.Millisecond):
+				state := snapshotCloseController(controller)
+				var want int32
+				if state.closing {
+					// close won the race; it must have terminated exactly once.
+					require.Equal(t, "close", resolve.name)
+					want = 1
 				}
+				assert.LessOrEqual(t, terminated.Load(), int32(1))
+				assertLifecycleEnded(t, controller, terminated, want)
 			}
 		})
 	}

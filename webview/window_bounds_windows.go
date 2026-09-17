@@ -52,6 +52,11 @@ type windowsWindowBoundsTracker struct {
 	ok        bool
 	destroyed bool
 	closed    bool
+
+	// closeRequest is the optional close interceptor hook. it is consulted on
+	// WM_CLOSE after the final bounds are captured and called without the
+	// mutex held; a true result consumes the message.
+	closeRequest func() bool
 }
 
 type windowsRect struct {
@@ -171,6 +176,18 @@ func (t *windowsWindowBoundsTracker) capture() {
 	t.mu.Unlock()
 }
 
+// consumeClose asks the optional close interceptor whether WM_CLOSE must be
+// consumed. the hook runs outside the mutex so it may re-enter the tracker.
+func (t *windowsWindowBoundsTracker) consumeClose() bool {
+	t.mu.Lock()
+	request := t.closeRequest
+	t.mu.Unlock()
+	if request == nil {
+		return false
+	}
+	return request()
+}
+
 func (t *windowsWindowBoundsTracker) markDestroyed() {
 	t.mu.Lock()
 	t.destroyed = true
@@ -188,6 +205,9 @@ func windowBoundsWndProc(hwnd uintptr, msg uint32, wparam uintptr, lparam uintpt
 		switch msg {
 		case wmMove, wmSize, wmWindowPosChanged, wmClose, wmDestroy, wmNCDestroy:
 			tracker.capture()
+		}
+		if msg == wmClose && tracker.consumeClose() {
+			return 0
 		}
 		if msg == wmDestroy || msg == wmNCDestroy {
 			tracker.markDestroyed()

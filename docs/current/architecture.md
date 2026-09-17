@@ -30,6 +30,8 @@ A webview-only process that connects to a running daemon. Resolves the daemon ad
 
 `App.EnableZoom` and `WindowApp.EnableZoom` optionally enable native page zoom on Linux. The configured window owns its keyboard handler and releases it with the window. Its zoom preference uses the existing window-state persistence; no product routes or frontend bindings are involved. See [runtime zoom controls](runtime.md#page-zoom).
 
+`App.OnCloseRequest` and `WindowApp.OnCloseRequest` optionally receive the window manager's close request before the native window is destroyed. dfw suppresses the native close, delivers a `*CloseRequest` on its own goroutine, and keeps the window open until the product calls `Close` or `KeepOpen`. Both entry points get the same capability because both own the same kind of native window. The decision usually lives in the product's page, and the product carries it there over its own HTTP API: `CloseRequest` is a Go value with two methods, not a transport. See [close requests](runtime.md#close-requests).
+
 ## Process Topology
 
 ```mermaid
@@ -79,6 +81,7 @@ The product remains a normal Go HTTP service; `dfw` just gives it a window.
 - Request proxying. The webview navigates to the HTTP server directly.
 - Single-instance enforcement. Products that need this implement it themselves (lock files, port detection, named mutex on Windows, etc.).
 - Multi-window in a single process. `Run` is one window; multi-window scenarios use `Daemon` + multiple `Window` processes.
+- Transport for lifecycle decisions. A close request is delivered as a Go value; the product's page learns about it, and answers it, through the product's own API.
 - Packaging or distribution tooling. Code signing, installer generation, auto-update — all out of scope.
 
 These choices keep the library narrow enough that a product can adopt it without taking on a framework. If something on this list becomes essential to a real product, it earns inclusion through that pressure.
