@@ -1,13 +1,11 @@
 package webview
 
 import (
-	"sync/atomic"
-
 	"github.com/michaelquigley/dfw/internal/core"
 )
 
 // Run starts a single-window application. This process owns the HTTP server,
-// any background work, and the window. It returns when the window is closed or
+// any background work, and the window. it returns when the window is closed or
 // on fatal error.
 func Run(app App) (err error) {
 	server, listener, err := core.ResolveListen("run", app.Listen)
@@ -15,12 +13,11 @@ func Run(app App) (err error) {
 		return err
 	}
 
-	var windowPtr atomic.Pointer[desktopWebView]
-	supervisor := core.SuperviseServe(server, listener, func() {
-		if w := windowPtr.Load(); w != nil {
-			w.Terminate()
-		}
-	})
+	// the coordinator exists before the server starts, so a serve failure that
+	// arrives before the window is constructed stays latched instead of being
+	// dropped.
+	termination := newTerminationCoordinator()
+	supervisor := core.SuperviseServe(server, listener, termination.request)
 	defer func() {
 		shutdownErr := supervisor.Shutdown()
 		if err == nil {
@@ -28,19 +25,21 @@ func Run(app App) (err error) {
 		}
 	}()
 
-	window, err := newConfiguredWebView(webviewConfig{
-		AppID:       app.AppID,
-		Title:       app.Title,
-		InitialSize: app.InitialSize,
-		IconPNG:     app.IconPNG,
-		Debug:       DevToolsEnabled(),
-		EnableZoom:  app.EnableZoom,
+	window, err := newConfiguredDesktopWebView(webviewConfig{
+		AppID:          app.AppID,
+		Title:          app.Title,
+		InitialSize:    app.InitialSize,
+		IconPNG:        app.IconPNG,
+		Debug:          DevToolsEnabled(),
+		EnableZoom:     app.EnableZoom,
+		OnCloseRequest: app.OnCloseRequest,
+		termination:    termination,
 	})
 	if err != nil {
+		termination.end()
 		return err
 	}
 	defer window.Destroy()
-	windowPtr.Store(window)
 
 	window.Navigate("http://" + listener.Addr().String())
 	window.Run()

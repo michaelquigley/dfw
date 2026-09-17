@@ -11,13 +11,14 @@ func Window(app WindowApp) error {
 		return err
 	}
 
-	window, err := newConfiguredWebView(webviewConfig{
-		AppID:       app.AppID,
-		Title:       app.Title,
-		InitialSize: app.InitialSize,
-		IconPNG:     app.IconPNG,
-		Debug:       DevToolsEnabled(),
-		EnableZoom:  app.EnableZoom,
+	window, err := newConfiguredDesktopWebView(webviewConfig{
+		AppID:          app.AppID,
+		Title:          app.Title,
+		InitialSize:    app.InitialSize,
+		IconPNG:        app.IconPNG,
+		Debug:          DevToolsEnabled(),
+		EnableZoom:     app.EnableZoom,
+		OnCloseRequest: app.OnCloseRequest,
 	})
 	if err != nil {
 		return err

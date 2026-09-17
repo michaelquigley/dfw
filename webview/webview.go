@@ -12,23 +12,31 @@ import (
 )
 
 type webviewConfig struct {
-	AppID       string
-	Title       string
-	InitialSize image.Point
-	IconPNG     []byte
-	Debug       bool
-	EnableZoom  bool
+	AppID          string
+	Title          string
+	InitialSize    image.Point
+	IconPNG        []byte
+	Debug          bool
+	EnableZoom     bool
+	OnCloseRequest func(*CloseRequest)
+
+	// termination is an optional coordinator created before the window so
+	// early termination requests stay latched. when nil the window owns one.
+	termination *terminationCoordinator
 }
 
 type desktopWebView struct {
-	w             webview.WebView
-	appID         string
-	boundsTracker nativeWindowBoundsTracker
-	zoom          nativeZoomController
-	savedZoom     *int
+	w                webview.WebView
+	appID            string
+	boundsTracker    nativeWindowBoundsTracker
+	zoom             nativeZoomController
+	savedZoom        *int
+	termination      *terminationCoordinator
+	closeController  *closeController
+	closeInterceptor nativeCloseInterceptor
 }
 
-func newConfiguredWebView(config webviewConfig) (*desktopWebView, error) {
+func newConfiguredDesktopWebView(config webviewConfig) (*desktopWebView, error) {
 	appID := strings.TrimSpace(config.AppID)
 	prepareNativeWindowIdentity(appID)
 
@@ -38,10 +46,17 @@ func newConfiguredWebView(config webviewConfig) (*desktopWebView, error) {
 	}
 	applyNativeWindowIdentity(w.Window(), appID)
 
+	termination := config.termination
+	if termination == nil {
+		termination = newTerminationCoordinator()
+	}
+	termination.bind(w.Dispatch, w.Terminate)
+
 	window := &desktopWebView{
 		w:             w,
 		appID:         appID,
 		boundsTracker: newNativeWindowBoundsTracker(w.Window()),
+		termination:   termination,
 	}
 	if config.Title != "" {
 		window.SetTitle(config.Title)
@@ -63,11 +78,28 @@ func newConfiguredWebView(config webviewConfig) (*desktopWebView, error) {
 		window.Destroy()
 		return nil, err
 	}
+	if config.OnCloseRequest != nil {
+		window.closeController = newCloseController(config.OnCloseRequest, termination.request)
+		interceptor, err := newNativeCloseInterceptor(w.Window(), window.closeController.requestClose)
+		if err != nil {
+			window.Destroy()
+			return nil, err
+		}
+		window.closeInterceptor = interceptor
+	}
 
 	return window, nil
 }
 
+// Destroy ends the window lifecycle, detaches close interception ahead of the
+// bounds and zoom controllers, and only then destroys the underlying webview,
+// so native teardown never reaches application code as a close request.
 func (w *desktopWebView) Destroy() {
+	w.endLifecycle()
+	if w.closeInterceptor != nil {
+		w.closeInterceptor.Close()
+		w.closeInterceptor = nil
+	}
 	if w.zoom != nil {
 		w.zoom.Close()
 		w.zoom = nil
@@ -83,8 +115,26 @@ func (w *desktopWebView) Navigate(url string) {
 	w.w.Navigate(url)
 }
 
+// Run enters the native event loop unless termination was requested before
+// the window was ready, and ends the lifecycle as soon as the loop returns so
+// a late close resolution or server failure cannot touch a stopping window.
 func (w *desktopWebView) Run() {
+	if w.termination.latched() {
+		w.endLifecycle()
+		return
+	}
+	// readiness is declared from the UI thread itself; a request that raced
+	// with startup is consumed there rather than being lost.
+	w.w.Dispatch(w.termination.ready)
 	w.w.Run()
+	w.endLifecycle()
+}
+
+func (w *desktopWebView) endLifecycle() {
+	if w.closeController != nil {
+		w.closeController.end()
+	}
+	w.termination.end()
 }
 
 func (w *desktopWebView) SaveWindowState() {
@@ -123,6 +173,9 @@ func (w *desktopWebView) SetTitle(title string) {
 	w.w.SetTitle(title)
 }
 
+// Terminate requests termination from any goroutine. the request is
+// marshaled to the UI thread through the termination coordinator; the pinned
+// Windows backend stops its loop with PostQuitMessage, which must run there.
 func (w *desktopWebView) Terminate() {
-	w.w.Terminate()
+	w.termination.request()
 }
