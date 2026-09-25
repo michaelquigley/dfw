@@ -3,7 +3,9 @@
 //
 // The package is intentionally small. Products own their HTTP API, embedded
 // web UI, background work, and distribution. dfw provides only the process and
-// window/tray lifecycle needed to run that HTTP UI as a desktop app.
+// window/tray lifecycle needed to run that HTTP UI as a desktop app. an optional
+// Linux PDF capability adds a native chooser and system-Chromium rendering;
+// products still own document preparation, transport, and final file publication.
 //
 // The functionality is split across subpackages so a consumer can take only
 // what it needs:

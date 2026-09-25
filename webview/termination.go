@@ -27,6 +27,8 @@ type terminationCoordinator struct {
 	terminated bool
 	dispatch   func(func())
 	terminate  func()
+	// onEnding only cancels a context; it must not acquire controller locks.
+	onEnding func()
 }
 
 func newTerminationCoordinator() *terminationCoordinator {
@@ -56,6 +58,9 @@ func (c *terminationCoordinator) request() {
 		return
 	}
 	c.requested = true
+	if c.onEnding != nil {
+		c.onEnding()
+	}
 	if c.state != terminationReady {
 		return
 	}
@@ -92,7 +97,29 @@ func (c *terminationCoordinator) ready() {
 func (c *terminationCoordinator) end() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.onEnding != nil {
+		c.onEnding()
+	}
 	c.state = terminationEnded
+}
+
+// enqueue shares termination's dispatch/end guard with optional native work.
+// the callback is checked again on the UI thread before touching native state.
+func (c *terminationCoordinator) enqueue(fn func()) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.state != terminationReady || c.requested {
+		return false
+	}
+	c.dispatch(func() {
+		c.mu.Lock()
+		active := c.state == terminationReady && !c.requested
+		c.mu.Unlock()
+		if active {
+			fn()
+		}
+	})
+	return true
 }
 
 // performTerminate runs on the UI thread and calls the native terminate

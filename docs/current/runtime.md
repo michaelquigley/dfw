@@ -2,7 +2,7 @@
 
 What `dfw` reads, writes, and observes at runtime. Everything in this document is library behavior; products do not configure it directly, but the on-disk and environment surface is visible to the user and to other processes on the same machine.
 
-All paths below resolve against `os.UserConfigDir()`:
+Persistent window and daemon paths resolve against `os.UserConfigDir()`:
 
 - Linux: `$XDG_CONFIG_HOME` or `~/.config`
 - Windows: `%AppData%` (typically `C:\Users\<user>\AppData\Roaming`)
@@ -54,6 +54,10 @@ The veto covers native close requests only. dfw's own termination paths bypass i
 Supported on Linux (GTK `delete-event`) and Windows (`WM_CLOSE` through the window procedure dfw already installs for bounds tracking). Setting the callback on any other platform, or on a window where the native hook cannot be installed, makes `Run` or `Window` return an error rather than open a window without the promised interception. A nil callback keeps the previous close behavior everywhere.
 
 Both platforms were exercised against a real window with `examples/dfw-example-close` on 2026-09-17: Windows through the title-bar control, Linux through the title-bar control under Wayland and through synthesized `WM_DELETE_WINDOW` requests under XWayland.
+
+## PDF export
+
+`App.PDF` and `WindowApp.PDF` opt into a Linux native save chooser and system-Chromium renderer. A render uses a private temporary `dfw-pdf-*` directory directly under the user's home, rather than the configuration tree or a personal browser profile. Normal cleanup removes it; a hard kill may leave it behind. Window cancellation remains observable after rendering through `PDFExporter.WindowContext()`, so a product can prevent later publication when its window has ended. The complete API, process policy, limits, and verification status live in [PDF export](pdf.md).
 
 ## Daemon Discovery
 

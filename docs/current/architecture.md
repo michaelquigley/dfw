@@ -10,6 +10,7 @@ The library exposes three entry points across two consumable subpackages. Each i
 
 - **`github.com/michaelquigley/dfw/tray`** — the tray-resident daemon (`tray.Daemon`, plus `tray.SpawnSelf` / `tray.Spawn`). Depends on `fyne.io/systray` only.
 - **`github.com/michaelquigley/dfw/webview`** — the desktop window entry points (`webview.Run`, `webview.Window`, and `webview.DevToolsEnabled`). Depends on the CGO webview binding (WebKitGTK / WebView2).
+- **`github.com/michaelquigley/dfw/internal/pdf`** — the private Chromium process, bounded CDP pipe, resource checks, and PDF byte stream. Used by webview's opt-in PDF capability; no native window or product data model, and no tray dependency.
 - **`github.com/michaelquigley/dfw/internal/core`** — shared HTTP-server supervision, daemon discovery, icon decoding, and window-state persistence. Pure Go, no CGO; imported by both subpackages, not by consumers.
 
 Because Go resolves dependencies per package, the `tray` package's transitive imports never include the webview binding. A consumer that imports only `dfw/tray` therefore builds **without** WebKitGTK/WebView2 — the binding is never compiled, and Go's module-graph pruning keeps it out of the consumer's module graph entirely. The two heavy native dependencies are fully isolated: the tray build never pulls the webview binding, and the webview build never pulls `systray`.
@@ -31,6 +32,8 @@ A webview-only process that connects to a running daemon. Resolves the daemon ad
 `App.EnableZoom` and `WindowApp.EnableZoom` optionally enable native page zoom on Linux. The configured window owns its keyboard handler and releases it with the window. Its zoom preference uses the existing window-state persistence; no product routes or frontend bindings are involved. See [runtime zoom controls](runtime.md#page-zoom).
 
 `App.OnCloseRequest` and `WindowApp.OnCloseRequest` optionally receive the window manager's close request before the native window is destroyed. dfw suppresses the native close, delivers a `*CloseRequest` on its own goroutine, and keeps the window open until the product calls `Close` or `KeepOpen`. Both entry points get the same capability because both own the same kind of native window. The decision usually lives in the product's page, and the product carries it there over its own HTTP API: `CloseRequest` is a Go value with two methods, not a transport. See [close requests](runtime.md#close-requests).
+
+`App.PDF` and `WindowApp.PDF` bind an optional `PDFExporter` to that same window lifetime. It presents a native save chooser and renders a caller-prepared loopback document through an isolated system-Chromium process. Products still own the HTTP API, immutable document resources, destination protection, and final file write; `WindowContext()` carries cancellation through product work after rendering. See [PDF export](pdf.md). A PDF-enabled window without an `OnCloseRequest` callback also routes native close through termination so its chooser is disposed before the parent is destroyed.
 
 ## Process Topology
 
@@ -77,7 +80,7 @@ The product remains a normal Go HTTP service; `dfw` just gives it a window.
 `dfw` v1 deliberately does not provide:
 
 - A JavaScript-to-Go bridge. The web UI talks to the product's HTTP API, not to Go through a postMessage channel.
-- Native menus or dialogs beyond the system tray. File pickers, modals, and context menus are web-side concerns.
+- General-purpose native menus or dialogs. The opt-in PDF destination chooser is the one file-dialog exception, earned by gloss's document-export workflow; other file pickers, modals, and context menus remain product concerns.
 - Request proxying. The webview navigates to the HTTP server directly.
 - Single-instance enforcement. Products that need this implement it themselves (lock files, port detection, named mutex on Windows, etc.).
 - Multi-window in a single process. `Run` is one window; multi-window scenarios use `Daemon` + multiple `Window` processes.

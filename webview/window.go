@@ -6,6 +6,10 @@ import "github.com/michaelquigley/dfw/internal/core"
 // discovers the server address via DFW_DAEMON_ADDR or the AppID-derived
 // runtime file.
 func Window(app WindowApp) error {
+	if err := app.PDF.claim(); err != nil {
+		return err
+	}
+	defer app.PDF.cancelWindow()
 	daemonAddr, err := core.ResolveDaemonAddr(app.AppID)
 	if err != nil {
 		return err
@@ -19,6 +23,7 @@ func Window(app WindowApp) error {
 		Debug:          DevToolsEnabled(),
 		EnableZoom:     app.EnableZoom,
 		OnCloseRequest: app.OnCloseRequest,
+		PDF:            app.PDF,
 	})
 	if err != nil {
 		return err

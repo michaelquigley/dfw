@@ -41,6 +41,18 @@ sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev
 
 A CGO-capable toolchain (typically `gcc` and `pkg-config`) is also required and is usually already present.
 
+## PDF checks
+
+PDF export is optional and Linux-only. It needs a separately installed system Chromium 131+ at runtime, not during an ordinary build or `make test`. On Ubuntu, `sudo snap install chromium` supplies the browser; on distributions with a native package, use their Chromium package. The library searches `chromium`, `chromium-browser`, then `/snap/bin/chromium`; products can set `PDFOptions.Executable` explicitly. Missing Chromium does not prevent a window from opening.
+
+The opt-in renderer gate requires Chromium, poppler's `pdfinfo`, `pdffonts`, and `pdftotext`, and a readable TrueType font:
+
+```sh
+DFW_PDF_TEST_FONT=/path/to/font.ttf make test-pdf
+```
+
+`DFW_PDF_EXECUTABLE` overrides discovery for this test. The gate fails clearly if a prerequisite is missing; it never silently substitutes a browser or disables its sandbox. Test PDF files and browser profiles are temporary. Native chooser acceptance is separate: `go run ./examples/dfw-example-pdf`, following its [README](../../examples/dfw-example-pdf/README.md). See the [PDF contract](pdf.md) for behavior and current verification limits.
+
 ## Windows
 
 The webview is WebView2 (Edge Chromium), which is installed by default on Windows 10 and 11. The Go side needs:

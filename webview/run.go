@@ -8,6 +8,10 @@ import (
 // any background work, and the window. it returns when the window is closed or
 // on fatal error.
 func Run(app App) (err error) {
+	if err := app.PDF.claim(); err != nil {
+		return err
+	}
+	defer app.PDF.cancelWindow()
 	server, listener, err := core.ResolveListen("run", app.Listen)
 	if err != nil {
 		return err
@@ -17,8 +21,10 @@ func Run(app App) (err error) {
 	// arrives before the window is constructed stays latched instead of being
 	// dropped.
 	termination := newTerminationCoordinator()
+	termination.onEnding = app.PDF.cancelWindow
 	supervisor := core.SuperviseServe(server, listener, termination.request)
 	defer func() {
+		app.PDF.cancelWindow()
 		shutdownErr := supervisor.Shutdown()
 		if err == nil {
 			err = shutdownErr
@@ -33,6 +39,7 @@ func Run(app App) (err error) {
 		Debug:          DevToolsEnabled(),
 		EnableZoom:     app.EnableZoom,
 		OnCloseRequest: app.OnCloseRequest,
+		PDF:            app.PDF,
 		termination:    termination,
 	})
 	if err != nil {

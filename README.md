@@ -8,7 +8,7 @@
 
 `dfw` is a small Go library that wraps an HTTP server and a webview window into a single desktop application. You bring the server and the web UI; `dfw` provides the process, the window, and — if you want it — a system tray daemon to keep the server resident between window sessions.
 
-It is intentionally narrow. The library does not ship a UI framework, a JavaScript-to-Go bridge, a request proxy, native file dialogs, a native menu bar, single-instance enforcement, or packaging tooling. Products own their HTTP API, their web UI, their background work, and their distribution; `dfw` just gives the result a window.
+It is intentionally narrow. The library does not ship a UI framework, a JavaScript-to-Go bridge, a request proxy, general-purpose native dialogs, a native menu bar, single-instance enforcement, or packaging tooling. Products own their HTTP API, their web UI, their background work, and their distribution; `dfw` just gives the result a window.
 
 ## The Three Modes
 
@@ -71,6 +71,8 @@ For a complete product — embedded React UI, filesystem watcher, daemon + windo
 
 To be asked before the window closes, set `OnCloseRequest` on `App` or `WindowApp`. The window stays open until the product calls `Close` or `KeepOpen` on the delivered request, and the product carries that decision to its page over its own API. [`examples/dfw-example-close`](examples/dfw-example-close) is the small fixture for that lifecycle; the contract is in [Runtime › Close Requests](docs/current/runtime.md#close-requests).
 
+For PDF export on Linux, opt into `App.PDF` or `WindowApp.PDF`: a native destination chooser and a separate system-Chromium renderer return PDF bytes for the product to publish. The normal window remains WebKitGTK; no browser is bundled or downloaded. See [PDF export](docs/current/pdf.md) and its [native fixture](examples/dfw-example-pdf/README.md).
+
 ## Platform Support
 
 | Platform | Webview | Tray | Window position | Close request |
@@ -90,6 +92,7 @@ Initial implementation. The library is feature-complete for the v1 scope on Linu
 - [Architecture](docs/current/architecture.md) — the three entry points, the process topology, and why the HTTP server is the system boundary.
 - [Building](docs/current/building.md) — toolchain, distro packages, Windows subsystem, the example's React bundle prerequisite.
 - [Runtime](docs/current/runtime.md) — on-disk state, environment variables, close requests, daemon discovery, devtools, the tray menu shape.
+- [PDF export](docs/current/pdf.md) — the opt-in Linux chooser, system Chromium, document delivery, and window-owned cancellation.
 - [Example walkthrough](docs/current/example.md) — `dfw-example-watch` end to end.
 
 ## Quick Build

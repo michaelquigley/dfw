@@ -19,6 +19,7 @@ type webviewConfig struct {
 	Debug          bool
 	EnableZoom     bool
 	OnCloseRequest func(*CloseRequest)
+	PDF            *PDFExporter
 
 	// termination is an optional coordinator created before the window so
 	// early termination requests stay latched. when nil the window owns one.
@@ -34,6 +35,7 @@ type desktopWebView struct {
 	termination      *terminationCoordinator
 	closeController  *closeController
 	closeInterceptor nativeCloseInterceptor
+	pdf              *PDFExporter
 }
 
 func newConfiguredDesktopWebView(config webviewConfig) (*desktopWebView, error) {
@@ -49,14 +51,17 @@ func newConfiguredDesktopWebView(config webviewConfig) (*desktopWebView, error) 
 	termination := config.termination
 	if termination == nil {
 		termination = newTerminationCoordinator()
+		termination.onEnding = config.PDF.cancelWindow
 	}
 	termination.bind(w.Dispatch, w.Terminate)
+	config.PDF.bind(termination.enqueue, nativePDFDialogFactory(w.Window()))
 
 	window := &desktopWebView{
 		w:             w,
 		appID:         appID,
 		boundsTracker: newNativeWindowBoundsTracker(w.Window()),
 		termination:   termination,
+		pdf:           config.PDF,
 	}
 	if config.Title != "" {
 		window.SetTitle(config.Title)
@@ -78,9 +83,15 @@ func newConfiguredDesktopWebView(config webviewConfig) (*desktopWebView, error) 
 		window.Destroy()
 		return nil, err
 	}
-	if config.OnCloseRequest != nil {
-		window.closeController = newCloseController(config.OnCloseRequest, termination.request)
-		interceptor, err := newNativeCloseInterceptor(w.Window(), window.closeController.requestClose)
+	if config.OnCloseRequest != nil || config.PDF.Supported() {
+		// an opted-in PDF window closes through termination so its native
+		// chooser is disposed before the parent window is destroyed.
+		requestClose := func() bool { termination.request(); return true }
+		if config.OnCloseRequest != nil {
+			window.closeController = newCloseController(config.OnCloseRequest, termination.request)
+			requestClose = window.closeController.requestClose
+		}
+		interceptor, err := newNativeCloseInterceptor(w.Window(), requestClose)
 		if err != nil {
 			window.Destroy()
 			return nil, err
@@ -125,7 +136,10 @@ func (w *desktopWebView) Run() {
 	}
 	// readiness is declared from the UI thread itself; a request that raced
 	// with startup is consumed there rather than being lost.
-	w.w.Dispatch(w.termination.ready)
+	w.w.Dispatch(func() {
+		w.termination.ready()
+		w.pdf.markReady()
+	})
 	w.w.Run()
 	w.endLifecycle()
 }
@@ -135,6 +149,7 @@ func (w *desktopWebView) endLifecycle() {
 		w.closeController.end()
 	}
 	w.termination.end()
+	w.pdf.endUI()
 }
 
 func (w *desktopWebView) SaveWindowState() {

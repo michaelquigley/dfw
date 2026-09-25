@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.1.3
+
+FEATURE: Linux windows can opt into `PDFExporter` for a native destination chooser and PDF rendering through separately installed system Chromium. The capability preserves the chooser's accepted filename, returns PDF bytes for product-owned publication, and exposes window-lifetime cancellation through `WindowContext`; it uses a private profile and control pipe with the browser sandbox enabled.
+
 ## v0.1.2
 
 CHANGE: GitHub Actions now builds the example frontend and installs dfw's Linux native dependencies before running the full race-enabled Go suite with coverage and a separate `golangci-lint` job on every push and pull request.
