@@ -140,8 +140,10 @@ func publish(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
-	defer tmp.Close()
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+	}()
 	if _, err = tmp.Write(data); err != nil {
 		return err
 	}

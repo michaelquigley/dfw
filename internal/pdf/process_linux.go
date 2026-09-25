@@ -84,13 +84,13 @@ func startProcess(override string) (*process, error) {
 	if err != nil {
 		return nil, Failure(RenderFailed, "create browser control pipe")
 	}
-	defer childIn.Close()
+	defer func() { _ = childIn.Close() }()
 	childOutParent, childOut, err := os.Pipe()
 	if err != nil {
 		_ = parentOut.Close()
 		return nil, Failure(RenderFailed, "create browser reply pipe")
 	}
-	defer childOut.Close()
+	defer func() { _ = childOut.Close() }()
 	args := []string{"--headless", "--remote-debugging-pipe", "--user-data-dir=" + filepath.Clean(profile), "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--disable-extensions", "--disable-component-extensions-with-background-pages", "--no-startup-window"}
 	cmd := exec.Command(bin, args...)
 	cmd.ExtraFiles = []*os.File{childIn, childOut}
