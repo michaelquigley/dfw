@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.4
+
 FIX: Linux window startup can select an unused real-time signal for JavaScriptCore before initialization instead of letting its GC handler replace Go's SIGUSR1 handler. The optional private API is resolved dynamically, explicit settings and existing signal use are respected, and unsupported/already-initialized cases retain their previous behavior. `DFW_DISABLE_JSC_SIGNAL_SETUP` opts out for applications with their own signal policy.
 
 ## v0.1.3
