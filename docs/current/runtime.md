@@ -33,6 +33,18 @@ Schema:
 
 The file is written once when the window closes (`SaveWindowState` called from `Run` / `Window` after the webview's blocking `Run()` returns). It is read once when the next window is created. There is no intermediate write during normal operation, so a crash mid-session forfeits the in-flight size, position, and zoom changes.
 
+## JavaScriptCore signal selection
+
+Before either window entry point creates its webview, Linux startup makes one best-effort attempt to assign JavaScriptCore an unused real-time signal for garbage collection. This avoids JSC's default SIGUSR1 replacing Go's existing handler and printing `Overriding existing handler for signal 10`. The choice uses libc's runtime `SIGRTMIN`–`SIGRTMAX` range, not a hard-coded signal number, and skips installed handlers, ignored signals, and signals blocked on the initialization thread. It never resets or replaces a signal handler itself. JavaScriptCore later installs its handler for the selected signal.
+
+The integration dynamically looks up the exported but private `JSConfigureSignalForGC` function. Its absence is not a link/load failure. If the API is missing, no suitable signal is available, or JSC has already initialized and refuses the choice, dfw leaves the existing behavior alone; the upstream warning may remain. This is not stderr filtering, a new shutdown handler, or a change to window-close consent. Other platforms keep their existing behavior.
+
+An explicitly present `JSC_SIGNAL_FOR_GC`, including an empty value, is left entirely to the embedding application. dfw does not set that variable: on the tested WebKit, JSC's separate option parser reports it as an invalid option even though the threading implementation reads it. Applications managing JSC programmatically or reserving process signals should set `DFW_DISABLE_JSC_SIGNAL_SETUP=1` before the first window. Empty, `0`, `false`, `no`, and `off` are false values, case-insensitively. The private API has no getter for a previous programmatic choice, so dfw cannot discover one; the opt-out is required for that case.
+
+The decision is once per process, not once per window, and there is no reset on close. Like JSC itself, this startup path assumes signal/JSC initialization is not raced by another library: the disposition/mask checks are observations, not an atomic process-wide reservation. Products with their own initialization policy should opt out rather than claim the selected signal later.
+
+`make test-jsc` exercises real JSC allocation, GC, and release in isolated Go subprocesses, without opening a GTK window. On the tested Go 1.27.1 / WebKitGTK 2.52.6 / glibc stack, automatic selection chose signal 34, left Go's SIGUSR1 handler unchanged, and emitted neither the collision warning nor an invalid-option warning. The ordinary gate tests configuration/one-time behavior and optional linking; the end-to-end GTK close observation remains a manual product check after adopting the new dfw version.
+
 ## Page Zoom
 
 Set `EnableZoom: true` in `webview.App` or `webview.WindowApp` to enable the Linux shortcuts: `ctrl++` or `ctrl+=` increases zoom by 10 percentage points, `ctrl+-` decreases it, and `ctrl+0` resets to 100%. Keypad plus/minus/zero also work. The window handles these before forwarding keys to focused web content, so they also work inside editors and inputs. Other shortcuts pass through. Zoom scales the complete page through WebKit's native zoom API; it does not inject CSS, modify the document, or require a JavaScript bridge.

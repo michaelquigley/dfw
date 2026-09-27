@@ -41,6 +41,7 @@ type desktopWebView struct {
 func newConfiguredDesktopWebView(config webviewConfig) (*desktopWebView, error) {
 	appID := strings.TrimSpace(config.AppID)
 	prepareNativeWindowIdentity(appID)
+	prepareNativeJavaScriptSignals()
 
 	w := webview.New(config.Debug)
 	if w == nil {

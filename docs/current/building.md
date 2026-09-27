@@ -41,6 +41,12 @@ sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev
 
 A CGO-capable toolchain (typically `gcc` and `pkg-config`) is also required and is usually already present.
 
+## JavaScriptCore signal check
+
+`make test-jsc` is the opt-in Linux probe for Go/JavaScriptCore signal coexistence. It uses the existing native development dependencies and isolated subprocesses, not a display or a user's desktop. It requires a JSC build exposing the optional configuration symbol and an initially unused real-time signal; missing probe prerequisites fail explicitly, while normal application startup keeps its documented fallback.
+
+The baseline and already-initialized probe cases intentionally print the original signal warning. The automatic-selection case must emit no collision or invalid-option warning, preserve Go's SIGUSR1 handler, and complete allocation/GC/release. Other cases prove that explicit settings, occupied signals, blocked signals, and the opt-out are respected. Probe-only C helpers compile solely with the `dfw_jsc_probe` tag and are absent from normal builds. See [runtime signal selection](runtime.md#javascriptcore-signal-selection).
+
 ## PDF checks
 
 PDF export is optional and Linux-only. It needs a separately installed system Chromium 131+ at runtime, not during an ordinary build or `make test`. On Ubuntu, `sudo snap install chromium` supplies the browser; on distributions with a native package, use their Chromium package. The library searches `chromium`, `chromium-browser`, then `/snap/bin/chromium`; products can set `PDFOptions.Executable` explicitly. Missing Chromium does not prevent a window from opening.

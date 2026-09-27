@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+FIX: Linux window startup can select an unused real-time signal for JavaScriptCore before initialization instead of letting its GC handler replace Go's SIGUSR1 handler. The optional private API is resolved dynamically, explicit settings and existing signal use are respected, and unsupported/already-initialized cases retain their previous behavior. `DFW_DISABLE_JSC_SIGNAL_SETUP` opts out for applications with their own signal policy.
+
 ## v0.1.3
 
 FEATURE: Linux windows can opt into `PDFExporter` for a native destination chooser and PDF rendering through separately installed system Chromium. The capability preserves the chooser's accepted filename, returns PDF bytes for product-owned publication, and exposes window-lifetime cancellation through `WindowContext`; it uses a private profile and control pipe with the browser sandbox enabled.
