@@ -16,14 +16,16 @@ func Window(app WindowApp) error {
 	}
 
 	window, err := newConfiguredDesktopWebView(webviewConfig{
-		AppID:          app.AppID,
-		Title:          app.Title,
-		InitialSize:    app.InitialSize,
-		IconPNG:        app.IconPNG,
-		Debug:          DevToolsEnabled(),
-		EnableZoom:     app.EnableZoom,
-		OnCloseRequest: app.OnCloseRequest,
-		PDF:            app.PDF,
+		AppID:            app.AppID,
+		Title:            app.Title,
+		InitialSize:      app.InitialSize,
+		IconPNG:          app.IconPNG,
+		Debug:            DevToolsEnabled(),
+		EnableZoom:       app.EnableZoom,
+		EnableFullscreen: app.EnableFullscreen,
+		Fullscreen:       app.Fullscreen,
+		OnCloseRequest:   app.OnCloseRequest,
+		PDF:              app.PDF,
 	})
 	if err != nil {
 		return err

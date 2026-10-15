@@ -32,15 +32,17 @@ func Run(app App) (err error) {
 	}()
 
 	window, err := newConfiguredDesktopWebView(webviewConfig{
-		AppID:          app.AppID,
-		Title:          app.Title,
-		InitialSize:    app.InitialSize,
-		IconPNG:        app.IconPNG,
-		Debug:          DevToolsEnabled(),
-		EnableZoom:     app.EnableZoom,
-		OnCloseRequest: app.OnCloseRequest,
-		PDF:            app.PDF,
-		termination:    termination,
+		AppID:            app.AppID,
+		Title:            app.Title,
+		InitialSize:      app.InitialSize,
+		IconPNG:          app.IconPNG,
+		Debug:            DevToolsEnabled(),
+		EnableZoom:       app.EnableZoom,
+		EnableFullscreen: app.EnableFullscreen,
+		Fullscreen:       app.Fullscreen,
+		OnCloseRequest:   app.OnCloseRequest,
+		PDF:              app.PDF,
+		termination:      termination,
 	})
 	if err != nil {
 		termination.end()

@@ -30,6 +30,7 @@ Schema:
 - `x` and `y` are written only when the platform supports window position tracking (currently Linux and Windows). On unsupported platforms the keys are absent and the next launch starts at the window manager's default position.
 
 - `zoom_percent` is optional. `webview.App.EnableZoom` and `webview.WindowApp.EnableZoom` opt into native page-zoom controls on Linux. Missing or invalid saved zoom starts at 100%; supported values are 50–200% in 10% steps. A window without zoom enabled preserves an existing zoom preference when saving its bounds.
+- A window with fullscreen enabled that closes fullscreen saves the windowed size and location it opened at, not the screen's bounds, so the next launch opens windowed at the size it had; its zoom is saved as usual. A resize made while windowed earlier in the same session is not kept when the window closes fullscreen.
 
 The file is written once when the window closes (`SaveWindowState` called from `Run` / `Window` after the webview's blocking `Run()` returns). It is read once when the next window is created. There is no intermediate write during normal operation, so a crash mid-session forfeits the in-flight size, position, and zoom changes.
 
@@ -50,6 +51,10 @@ The decision is once per process, not once per window, and there is no reset on 
 Set `EnableZoom: true` in `webview.App` or `webview.WindowApp` to enable the Linux shortcuts: `ctrl++` or `ctrl+=` increases zoom by 10 percentage points, `ctrl+-` decreases it, and `ctrl+0` resets to 100%. Keypad plus/minus/zero also work. The window handles these before forwarding keys to focused web content, so they also work inside editors and inputs. Other shortcuts pass through. Zoom scales the complete page through WebKit's native zoom API; it does not inject CSS, modify the document, or require a JavaScript bridge.
 
 The zoom level is saved with the window's bounds on normal close and restored by AppID. Multiple windows retain the existing last-close-wins preference behavior. Zoom is opt-in so existing applications keep their keyboard behavior. The option currently has no effect outside Linux.
+
+## Fullscreen
+
+Set `EnableFullscreen: true` in `webview.App` or `webview.WindowApp` to bind F11 on Linux: it toggles the window between fullscreen and windowed, and with Ctrl, Shift, Alt, or Super held it passes through to the page. The window handles it before forwarding keys to focused web content. Fullscreen is opt-in so existing applications keep F11 for their pages. Set `Fullscreen: true` to open the window fullscreen; it binds F11 as well, so the window can leave fullscreen. Fullscreen is requested after the window's size and location are applied, so leaving it returns to them. The window tracks its fullscreen state from the window manager's reports rather than from what it last requested, so a refused request or a window manager's own fullscreen shortcut is followed too. The window releases its handlers when it is destroyed. The options and F11 have no effect outside Linux.
 
 ## Close Requests
 

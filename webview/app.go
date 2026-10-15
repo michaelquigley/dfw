@@ -18,6 +18,11 @@ type App struct {
 	IconPNG []byte
 	// EnableZoom enables remembered page zoom and standard keyboard shortcuts on Linux.
 	EnableZoom bool
+	// EnableFullscreen binds F11 to toggle fullscreen on Linux.
+	EnableFullscreen bool
+	// Fullscreen opens the window fullscreen on Linux, and binds F11 as
+	// EnableFullscreen does.
+	Fullscreen bool
 	// PDF optionally supplies a window-bound chooser and system-Chromium renderer.
 	PDF *PDFExporter
 	// Listen returns an unstarted server and open listener for dfw to own.
@@ -40,6 +45,11 @@ type WindowApp struct {
 	IconPNG []byte
 	// EnableZoom enables remembered page zoom and standard keyboard shortcuts on Linux.
 	EnableZoom bool
+	// EnableFullscreen binds F11 to toggle fullscreen on Linux.
+	EnableFullscreen bool
+	// Fullscreen opens the window fullscreen on Linux, and binds F11 as
+	// EnableFullscreen does.
+	Fullscreen bool
 	// PDF optionally supplies a window-bound chooser and system-Chromium renderer.
 	PDF *PDFExporter
 	// OnCloseRequest receives a native close request before the window is

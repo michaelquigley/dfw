@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.1.5
+
+FEATURE: Applications can opt into fullscreen on Linux with `EnableFullscreen` on `webview.App` or `webview.WindowApp`, which binds F11 to toggle it; `Fullscreen` opens the window fullscreen and binds F11 too. The state follows the window manager's reports, and a window closed fullscreen saves its windowed size and location rather than the screen's.
+
 ## v0.1.4
 
 FIX: Linux window startup can select an unused real-time signal for JavaScriptCore before initialization instead of letting its GC handler replace Go's SIGUSR1 handler. The optional private API is resolved dynamically, explicit settings and existing signal use are respected, and unsupported/already-initialized cases retain their previous behavior. `DFW_DISABLE_JSC_SIGNAL_SETUP` opts out for applications with their own signal policy.

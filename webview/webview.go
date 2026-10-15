@@ -12,14 +12,16 @@ import (
 )
 
 type webviewConfig struct {
-	AppID          string
-	Title          string
-	InitialSize    image.Point
-	IconPNG        []byte
-	Debug          bool
-	EnableZoom     bool
-	OnCloseRequest func(*CloseRequest)
-	PDF            *PDFExporter
+	AppID            string
+	Title            string
+	InitialSize      image.Point
+	IconPNG          []byte
+	Debug            bool
+	EnableZoom       bool
+	EnableFullscreen bool
+	Fullscreen       bool
+	OnCloseRequest   func(*CloseRequest)
+	PDF              *PDFExporter
 
 	// termination is an optional coordinator created before the window so
 	// early termination requests stay latched. when nil the window owns one.
@@ -36,6 +38,10 @@ type desktopWebView struct {
 	closeController  *closeController
 	closeInterceptor nativeCloseInterceptor
 	pdf              *PDFExporter
+	fullscreen       nativeFullscreenController
+	// windowed is the size and location the window opened at, saved in place
+	// of the screen's bounds when it closes fullscreen.
+	windowed core.WindowState
 }
 
 func newConfiguredDesktopWebView(config webviewConfig) (*desktopWebView, error) {
@@ -74,11 +80,17 @@ func newConfiguredDesktopWebView(config webviewConfig) (*desktopWebView, error) 
 		window.zoom = newNativeZoom(w.Window(), core.ChooseInitialWindowZoom(state, hasState))
 	}
 	size := core.ChooseInitialWindowSize(config.InitialSize, state, hasState)
+	window.windowed = core.WindowState{Width: size.X, Height: size.Y}
 	if size.X > 0 && size.Y > 0 {
 		window.SetSize(size)
 	}
 	if x, y, ok := core.ChooseInitialWindowLocation(state, hasState); ok {
 		applyNativeWindowLocation(w.Window(), x, y)
+		window.windowed.X, window.windowed.Y = &x, &y
+	}
+	// after the size and location, so leaving fullscreen returns to them.
+	if config.fullscreenEnabled() {
+		window.fullscreen = newNativeFullscreen(w.Window(), config.Fullscreen)
 	}
 	if err := window.SetIcon(config.IconPNG); err != nil {
 		window.Destroy()
@@ -104,8 +116,9 @@ func newConfiguredDesktopWebView(config webviewConfig) (*desktopWebView, error) 
 }
 
 // Destroy ends the window lifecycle, detaches close interception ahead of the
-// bounds and zoom controllers, and only then destroys the underlying webview,
-// so native teardown never reaches application code as a close request.
+// bounds, zoom, and fullscreen controllers, and only then destroys the
+// underlying webview, so native teardown never reaches application code as a
+// close request.
 func (w *desktopWebView) Destroy() {
 	w.endLifecycle()
 	if w.closeInterceptor != nil {
@@ -115,6 +128,10 @@ func (w *desktopWebView) Destroy() {
 	if w.zoom != nil {
 		w.zoom.Close()
 		w.zoom = nil
+	}
+	if w.fullscreen != nil {
+		w.fullscreen.Close()
+		w.fullscreen = nil
 	}
 	if w.boundsTracker != nil {
 		w.boundsTracker.Close()
@@ -158,12 +175,16 @@ func (w *desktopWebView) SaveWindowState() {
 		return
 	}
 
-	bounds, ok := w.boundsTracker.Bounds()
-	if !ok {
-		return
+	// fullscreen bounds are the screen's; the windowed ones are kept, and the
+	// zoom is still saved.
+	state := w.windowed
+	if w.fullscreen == nil || !w.fullscreen.Fullscreen() {
+		bounds, ok := w.boundsTracker.Bounds()
+		if !ok {
+			return
+		}
+		state = core.WindowStateFromBounds(bounds)
 	}
-
-	state := core.WindowStateFromBounds(bounds)
 	state.ZoomPercent = w.savedZoom
 	if w.zoom != nil {
 		percent := w.zoom.Percent()
