@@ -14,6 +14,8 @@ type trayConfig struct {
 	DaemonAddr  string
 	SpawnWindow func(daemonAddr string) error
 	TrayItems   []TrayMenuItem
+	OnQuit      func() bool
+	Control     *Control
 	Stop        <-chan struct{}
 }
 
@@ -21,10 +23,18 @@ func runTray(config trayConfig) error {
 	ready := make(chan error, 1)
 	exited := make(chan struct{})
 
+	// every path that quits the tray goes through quit, which ends the
+	// control first so no change reaches systray after it starts shutting
+	// down.
+	quit := func() {
+		config.Control.end()
+		systray.Quit()
+	}
+
 	systray.Run(func() {
-		if err := configureTray(config); err != nil {
+		if err := configureTray(config, quit); err != nil {
 			ready <- err
-			systray.Quit()
+			quit()
 			return
 		}
 		ready <- nil
@@ -32,12 +42,13 @@ func runTray(config trayConfig) error {
 			go func() {
 				select {
 				case <-config.Stop:
-					systray.Quit()
+					quit()
 				case <-exited:
 				}
 			}()
 		}
 	}, func() {
+		config.Control.end()
 		close(exited)
 	})
 
@@ -49,7 +60,7 @@ func runTray(config trayConfig) error {
 	}
 }
 
-func configureTray(config trayConfig) error {
+func configureTray(config trayConfig, quit func()) error {
 	if config.Title != "" {
 		systray.SetTitle(config.Title)
 		systray.SetTooltip(config.Title)
@@ -73,8 +84,10 @@ func configureTray(config trayConfig) error {
 		}()
 	}
 
+	menuItems := make([]*systray.MenuItem, 0, len(config.TrayItems))
 	for _, item := range config.TrayItems {
 		menuItem := systray.AddMenuItem(item.Label, item.Tooltip)
+		menuItems = append(menuItems, menuItem)
 		if item.Disabled {
 			menuItem.Disable()
 		}
@@ -89,15 +102,48 @@ func configureTray(config trayConfig) error {
 	}
 
 	systray.AddSeparator()
-	quit := systray.AddMenuItem("Quit", "Quit")
-	go func() {
-		for range quit.ClickedCh {
-			systray.Quit()
+	quitItem := systray.AddMenuItem("Quit", "Quit")
+	go runQuitItem(quitItem.ClickedCh, config.OnQuit, quit)
+
+	config.Control.bind(systrayBackend{items: menuItems}, len(menuItems))
+	return nil
+}
+
+// runQuitItem serves the Quit item. a click arriving while onQuit runs finds
+// no receiver and is dropped by systray, so a slow onQuit is never re-entered.
+func runQuitItem(clicked <-chan struct{}, onQuit func() bool, quit func()) {
+	for range clicked {
+		if onQuit == nil || onQuit() {
+			quit()
 			return
 		}
-	}()
+	}
+}
 
-	return nil
+// systrayBackend applies Control changes to the live systray. Control
+// serializes the calls; systray's MenuItem setters are not safe concurrently.
+type systrayBackend struct {
+	items []*systray.MenuItem
+}
+
+func (b systrayBackend) SetIcon(icon []byte) {
+	systray.SetIcon(icon)
+}
+
+func (b systrayBackend) SetTooltip(tooltip string) {
+	systray.SetTooltip(tooltip)
+}
+
+func (b systrayBackend) SetItemLabel(index int, label string) {
+	b.items[index].SetTitle(label)
+}
+
+func (b systrayBackend) SetItemEnabled(index int, enabled bool) {
+	if enabled {
+		b.items[index].Enable()
+	} else {
+		b.items[index].Disable()
+	}
 }
 
 func validateTrayIconPNG(iconPNG []byte) error {

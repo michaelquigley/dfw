@@ -23,7 +23,7 @@ One process. The HTTP server and the webview window run together, navigation poi
 
 ### `tray.Daemon(DaemonApp)`
 
-A tray-resident process. Owns the HTTP server and any background work, writes a `daemon.json` runtime file so window clients can discover its address, and shows a system tray icon with a menu. The function returns when the daemon is shut down via the tray menu (or on fatal error). The daemon itself does not open a window — it relies on a separate `Window` process for that.
+A tray-resident process. Owns the HTTP server and any background work, writes a `daemon.json` runtime file so window clients can discover its address, and shows a system tray icon with a menu. The function returns when the daemon is shut down via the tray menu or the product's `tray.Control` (or on fatal error). The daemon itself does not open a window — it relies on a separate `Window` process for that.
 
 ### `webview.Window(WindowApp)`
 

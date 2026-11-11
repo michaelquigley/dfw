@@ -26,6 +26,8 @@ The HTTP server and the webview run in the same process. The window opens, navig
 
 A long-running process owns the HTTP server and shows a system tray icon. Background work keeps running with the tray visible; opening a window is a separate step.
 
+The daemon can take part in its own lifetime. `DaemonApp.OnQuit` is asked when `Quit` is chosen and can decline it, so a daemon holding work in flight can confirm first or shut down gracefully. A `tray.Control`, created with `tray.NewControl()` and passed in `DaemonApp.Control`, lets the product change the tray icon, the tooltip, and its items' labels and enabled state from any goroutine while the daemon runs, and end the daemon itself with `Stop`. [`examples/dfw-example-tray`](examples/dfw-example-tray) is the small fixture for both; the contract is in [Runtime › Tray](docs/current/runtime.md#tray).
+
 | Linux | Windows |
 | :---: | :---: |
 | ![dfw-example-watcher Tray/Daemon on Linux](docs/images/linux-daemon.png) | ![dfw-example-watcher Tray/Daemon on Linux](docs/images/windows-daemon.png) |
@@ -91,7 +93,7 @@ Initial implementation. The library is feature-complete for the v1 scope on Linu
 
 - [Architecture](docs/current/architecture.md) — the three entry points, the process topology, and why the HTTP server is the system boundary.
 - [Building](docs/current/building.md) — toolchain, distro packages, Windows subsystem, the example's React bundle prerequisite.
-- [Runtime](docs/current/runtime.md) — on-disk state, environment variables, close requests, daemon discovery, devtools, the tray menu shape.
+- [Runtime](docs/current/runtime.md) — on-disk state, environment variables, close requests, daemon discovery, devtools, the tray menu, quit hook, and live tray control.
 - [PDF export](docs/current/pdf.md) — the opt-in Linux chooser, system Chromium, document delivery, and window-owned cancellation.
 - [Example walkthrough](docs/current/example.md) — `dfw-example-watch` end to end.
 

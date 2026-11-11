@@ -104,6 +104,10 @@ This is the intended pattern for products using `dfw`: the web UI talks to the p
 
 `dfw-example-watch` is about process topology, and it deliberately has no close-request handling. The native close lifecycle has its own small fixture: `examples/dfw-example-close`, a single Go file serving an inline page over its own loopback API. Its README carries the manual sequence that proves a pending request, dropped repeats, `KeepOpen`, and an accepted `Close` against a real window. See [runtime.md](runtime.md#close-requests) for the contract it exercises.
 
+## The Tray Fixture
+
+`dfw-example-watch`'s tray menu is fixed at startup, and Quit always quits. A daemon that takes part in its own lifetime has its own small fixture: `examples/dfw-example-tray`, a single Go file that imports only `dfw/tray`. A busy state drives the icon, the tooltip, and the item labels through `tray.Control`; `OnQuit` declines Quit while busy; and a countdown item and `POST /api/stop` end the daemon with `Control.Stop`. Its README carries the manual sequence. See [runtime.md](runtime.md#tray) for the contract it exercises.
+
 ## Build Sequence
 
 Full build:

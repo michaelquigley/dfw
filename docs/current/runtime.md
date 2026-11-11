@@ -114,11 +114,30 @@ Products typically expose this via a `--devtools` flag that sets `DFW_DEVTOOLS=1
 
 1. **`Open Window`** — added only when `DaemonApp.SpawnWindow` is non-nil. Clicking it calls `SpawnWindow(daemonAddr)`; the typical implementation is `tray.SpawnSelf("window")`. Errors are logged via `df/dl` and do not tear down the daemon.
 2. **Product items** — each `TrayMenuItem` from `DaemonApp.TrayItems` becomes a menu entry with the supplied `Label`, `Tooltip`, and `OnClick`. `Disabled: true` items are added but greyed out.
-3. **Separator + `Quit`** — clicking `Quit` triggers the systray shutdown, which returns control to `tray.Daemon` and lets the library's deferred cleanup run.
+3. **Separator + `Quit`** — choosing `Quit` triggers the systray shutdown, which returns control to `tray.Daemon` and lets the library's deferred cleanup run, unless `OnQuit` declines it.
 
-The menu is built once at startup. Items cannot be added, removed, or relabeled at runtime; products that need dynamic menus would either fork the tray code or wait for that capability to be added.
+Items cannot be added or removed after startup, and an item's tooltip stays as it was built; the icon, the tray tooltip, and each product item's label and enabled state can change through a `Control` (below). The tray tooltip and title are set from `DaemonApp.Title` when non-empty.
 
-The tray tooltip is set from `DaemonApp.Title` when non-empty.
+### Quit requests
+
+Set `DaemonApp.OnQuit` to take part in Quit. It is called when `Quit` is chosen: returning true quits exactly as an absent `OnQuit` does, and returning false keeps the daemon running with nothing changed. A product that declines can confirm with the operator, or begin a graceful shutdown, and end the daemon itself with `Control.Stop` when ready. A nil `OnQuit` keeps the unconditional Quit.
+
+`OnQuit` is a synchronous predicate, unlike `webview.CloseRequest`, because the decision it makes is "may I quit right now" and a product that needs longer already has `Control.Stop` to finish with. It runs on the tray's own goroutine and should return promptly. `Quit` chosen again while it runs is dropped, not queued, so it is never re-entered.
+
+The hook covers the `Quit` item only. `Control.Stop` and a supervised server failure end the daemon without consulting it.
+
+### Changing the tray while it runs
+
+Create a `*tray.Control` with `tray.NewControl()` and pass it in `DaemonApp.Control`. The application keeps the same value and can call it from any goroutine:
+
+- `SetIcon(png []byte) error` replaces the tray icon. It takes PNG bytes like `DaemonApp.IconPNG` and converts them the same way; an empty or undecodable PNG returns an error and changes nothing.
+- `SetTooltip(string)` replaces the tray tooltip. The title stays `DaemonApp.Title`.
+- `Item(i)` returns the handle for `DaemonApp.TrayItems[i]`, with `SetLabel(string)`, `Enable()` and `Disable()`. An index that names no item gives a handle that does nothing. `Open Window` and `Quit` are not reachable through it.
+- `Stop()` ends the daemon through the same path as `Quit`: the tray closes, the HTTP server shuts down, `daemon.json` is removed, and `tray.Daemon` returns nil. It is idempotent.
+
+Calls made before the tray is built (before `Daemon` is called, or while it is still starting) are recorded and applied once the tray exists; for each setting the latest call wins. That matters because the server starts serving before the tray is built, so a handler can change the tray's state before it appears. A `Stop` made before `Daemon` is called makes the daemon stop as soon as its tray is up. Once the daemon begins quitting, by any route, every method does nothing, and `Item` handles keep that guarantee too. Every method tolerates a nil receiver.
+
+A `Control` serves one `Daemon` call. Passing one that has already been used to another `Daemon` call makes that call return an error before it opens a listener.
 
 ## Icons
 
@@ -142,4 +161,4 @@ On GNOME, the running-app panel/dock icon is matched through desktop identity, n
 ## Related
 
 - [architecture.md](architecture.md) — the three entry points and the HTTP boundary that frames everything here.
-- [example.md](example.md) — `dfw-example-watch` exercises the topology, discovery, and tray behavior on this page; `dfw-example-close` is the close-request fixture.
+- [example.md](example.md) — `dfw-example-watch` exercises the topology, discovery, and tray behavior on this page; `dfw-example-close` is the close-request fixture, and `dfw-example-tray` the fixture for the quit hook and `tray.Control`.

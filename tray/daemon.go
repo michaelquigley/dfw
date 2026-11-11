@@ -10,18 +10,27 @@ import (
 // Daemon starts a tray-resident daemon. This process owns the HTTP server and
 // any background work, exposes a tray icon, and writes a runtime file for
 // window discovery. It returns when the daemon is shut down via the tray menu
-// or on fatal error.
+// or Control.Stop, or on fatal error.
 func Daemon(app DaemonApp) (err error) {
+	trayStop := make(chan struct{})
+	var stopOnce sync.Once
+	stop := func() {
+		stopOnce.Do(func() { close(trayStop) })
+	}
+
+	// claim before listening so a reused Control fails without opening a
+	// listener; end only a control this call claimed.
+	if err := app.Control.claim(stop); err != nil {
+		return err
+	}
+	defer app.Control.end()
+
 	server, listener, err := core.ResolveListen("daemon", app.Listen)
 	if err != nil {
 		return err
 	}
 
-	trayStop := make(chan struct{})
-	var stopOnce sync.Once
-	supervisor := core.SuperviseServe(server, listener, func() {
-		stopOnce.Do(func() { close(trayStop) })
-	})
+	supervisor := core.SuperviseServe(server, listener, stop)
 	defer func() {
 		shutdownErr := supervisor.Shutdown()
 		if err == nil {
@@ -46,6 +55,8 @@ func Daemon(app DaemonApp) (err error) {
 		DaemonAddr:  listener.Addr().String(),
 		SpawnWindow: app.SpawnWindow,
 		TrayItems:   app.TrayItems,
+		OnQuit:      app.OnQuit,
+		Control:     app.Control,
 		Stop:        trayStop,
 	})
 }

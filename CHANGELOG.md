@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+FEATURE: Tray daemons can take part in their own lifetime and change their tray while they run. `DaemonApp.OnQuit` is asked when `Quit` is chosen and can decline it. A `tray.Control` from `tray.NewControl()`, passed in `DaemonApp.Control`, replaces the icon and tooltip, relabels, enables, and disables `TrayItems`, and ends the daemon through the same path as `Quit` with `Stop`. Calls are safe from any goroutine, and calls made before the tray is built are applied when it appears. Daemons that set neither field behave as before.
+
 ## v0.1.5
 
 FEATURE: Applications can opt into fullscreen on Linux with `EnableFullscreen` on `webview.App` or `webview.WindowApp`, which binds F11 to toggle it; `Fullscreen` opens the window fullscreen and binds F11 too. The state follows the window manager's reports, and a window closed fullscreen saves its windowed size and location rather than the screen's.
