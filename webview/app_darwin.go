@@ -119,6 +119,14 @@ static WKWebView *dfw_find_web_view(NSView *view) {
 		completionHandler(nil);
 		return;
 	}
+	// a web view without a window is one whose window has closed: a late
+	// request gets no files, never a standalone modal panel nothing could
+	// cancel at teardown.
+	NSWindow *window = [webView window];
+	if (window == nil) {
+		completionHandler(nil);
+		return;
+	}
 	NSOpenPanel *panel = [NSOpenPanel openPanel];
 	BOOL directories = [parameters allowsDirectories];
 	[panel setCanChooseDirectories:directories];
@@ -126,15 +134,9 @@ static WKWebView *dfw_find_web_view(NSView *view) {
 	[panel setAllowsMultipleSelection:[parameters allowsMultipleSelection]];
 	[self setOpenPanelCompletion:completionHandler];
 	[self setOpenPanel:panel];
-	void (^done)(NSModalResponse) = ^(NSModalResponse response) {
+	[panel beginSheetModalForWindow:window completionHandler:^(NSModalResponse response) {
 		[self finishOpenPanel:(response == NSModalResponseOK ? [panel URLs] : nil)];
-	};
-	NSWindow *window = [webView window];
-	if (window != nil) {
-		[panel beginSheetModalForWindow:window completionHandler:done];
-		return;
-	}
-	done([panel runModal]);
+	}];
 }
 
 // answers WebKit once, for whichever comes first: the chooser's own result
@@ -217,6 +219,23 @@ static void dfw_prepare_app(void) {
 	dfw_previous_policy = [app activationPolicy];
 	dfw_policy_saved = YES;
 	[app setActivationPolicy:NSApplicationActivationPolicyRegular];
+}
+
+// gives the process a menu bar of its own before dfw's, as a host might
+// have, and reports the main menu's identity, for the tests. a regular
+// application with no menu bar gets a bare one AppKit makes up for nil, so the
+// test starts from a menu bar it owns.
+static void dfw_install_test_menu(void) {
+	NSMenu *bar = [[NSMenu alloc] init];
+	NSMenuItem *item = [bar addItemWithTitle:@"" action:nil keyEquivalent:@""];
+	NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Host"];
+	[menu addItemWithTitle:@"Marker" action:nil keyEquivalent:@""];
+	[item setSubmenu:menu];
+	[NSApp setMainMenu:bar];
+}
+
+static uintptr_t dfw_main_menu_id(void) {
+	return (uintptr_t)(__bridge void *)[NSApp mainMenu];
 }
 
 // the process's activation policy, read and set for the tests.
@@ -481,6 +500,22 @@ static int dfw_second_test_open_panel(void) {
 	return answered;
 }
 
+// asks a fresh delegate for a chooser from a web view with no window, as a
+// late request after the window closed would, and reports how many times it
+// was answered before returning.
+static int dfw_windowless_test_open_panel(void) {
+	__block int answered = 0;
+	DFWUIDelegate *delegate = [[DFWUIDelegate alloc] init];
+	WKWebView *web = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)
+		configuration:[[WKWebViewConfiguration alloc] init]];
+	WKOpenPanelParameters *noParameters = nil;
+	WKFrameInfo *noFrame = nil;
+	[delegate webView:web runOpenPanelWithParameters:noParameters initiatedByFrame:noFrame completionHandler:^(NSArray<NSURL *> *URLs) {
+		answered++;
+	}];
+	return answered;
+}
+
 // finishes the armed chooser once more, as its sheet's result arriving after a
 // detach would, and reports how many times WebKit's completion ran in all.
 static int dfw_finish_test_open_panel(void) {
@@ -656,6 +691,14 @@ func nativeActivationPolicy() int {
 	return int(C.dfw_activation_policy())
 }
 
+func installNativeTestMenu() {
+	C.dfw_install_test_menu()
+}
+
+func nativeMainMenuID() uintptr {
+	return uintptr(C.dfw_main_menu_id())
+}
+
 func setNativeActivationPolicy(policy int) {
 	C.dfw_set_activation_policy(C.int(policy))
 }
@@ -681,6 +724,10 @@ func armNativeTestOpenPanel(window unsafe.Pointer) {
 
 func secondNativeTestOpenPanel() int {
 	return int(C.dfw_second_test_open_panel())
+}
+
+func windowlessNativeTestOpenPanel() int {
+	return int(C.dfw_windowless_test_open_panel())
 }
 
 func finishNativeTestOpenPanel() int {

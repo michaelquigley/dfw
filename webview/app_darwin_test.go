@@ -15,8 +15,13 @@ import (
 // read in TestMain: AppKit wants the main thread, and only TestMain's
 // goroutine holds it (webview_go locks it in init).
 var (
-	// the menu bar before newNativeApp: the test binary's own, none.
+	// the menu bar before newNativeApp, a host's own, installed by the test;
+	// and the main menu's identity before newNativeApp, during, and after
+	// Close.
 	menuBeforeApp string
+	menuIDBefore  uintptr
+	menuIDDuring  uintptr
+	menuIDAfter   uintptr
 
 	nativeMainMenu          map[string][]string
 	nativeMainMenuText      string
@@ -45,6 +50,8 @@ var (
 	// was answered at once, and how many times WebKit was answered in all.
 	secondChooserAnswers  int
 	pendingChooserAnswers int
+	// a chooser asked for from a web view with no window.
+	windowlessChooserAnswers int
 
 	// the window's own live flag: after Activate, after EndActivation, and
 	// after Activate on a closed controller.
@@ -62,9 +69,12 @@ func TestMain(m *testing.M) {
 	policyBefore = nativeActivationPolicy()
 	prepareNativeApp()
 	policyPrepared = nativeActivationPolicy()
+	installNativeTestMenu()
 	menuBeforeApp = describeNativeMainMenu()
+	menuIDBefore = nativeMainMenuID()
 	app := newNativeApp(window)
 	nativeMainMenuText = describeNativeMainMenu()
+	menuIDDuring = nativeMainMenuID()
 	nativeMainMenu = parseNativeMenu(nativeMainMenuText)
 	nativeUIDelegate = describeNativeUIDelegate(window)
 	nativeWindowStyle = describeNativeWindowStyle(window)
@@ -75,12 +85,14 @@ func TestMain(m *testing.M) {
 	liveAfterActivate = nativeAppLive(app)
 	app.EndActivation()
 	liveAfterEndActivation = nativeAppLive(app)
+	windowlessChooserAnswers = windowlessNativeTestOpenPanel()
 	armNativeTestOpenPanel(window)
 	secondChooserAnswers = secondNativeTestOpenPanel()
 	app.Close()
 	app.Activate()
 	liveAfterClose = nativeAppLive(app)
 	detachedMainMenu = describeNativeMainMenu()
+	menuIDAfter = nativeMainMenuID()
 	detachedUIDelegate = describeNativeUIDelegate(window)
 	detachedQuitHandlerWindow = nativeQuitHandlerHasWindow()
 	detachedQuitFallback = nativeQuitHandlerFallsBack()
@@ -172,8 +184,12 @@ func TestNativeDetachLeavesTheHooksInert(t *testing.T) {
 	assert.False(t, detachedQuitFallback, "the quit handler would terminate during teardown")
 	assert.Equal(t, 0, detachedQuitCloseRequests, "a quit event during teardown")
 	assert.Equal(t, "nil", detachedUIDelegate)
-	assert.NotEqual(t, menuBeforeApp, nativeMainMenuText, "newNativeApp installed no menu bar")
-	assert.Equal(t, menuBeforeApp, detachedMainMenu, "the menu bar after Close")
+	assert.NotEqual(t, menuIDBefore, menuIDDuring, "newNativeApp installed no menu bar")
+	assert.Contains(t, menuBeforeApp, "Host: Marker=", "the host's menu bar before newNativeApp")
+	// the host's own menu bar is the one back, and none of dfw's menus are.
+	assert.Equal(t, menuIDBefore, menuIDAfter, "the menu bar after Close")
+	assert.Contains(t, detachedMainMenu, "Host: Marker=")
+	assert.NotContains(t, detachedMainMenu, "Edit: ")
 }
 
 // a chooser still open at teardown is answered by the detach, and its sheet's
@@ -209,4 +225,10 @@ func TestNativeReleaseFallsBackToTerminate(t *testing.T) {
 func TestNativeReleaseRestoresTheActivationPolicy(t *testing.T) {
 	assert.Equal(t, nativeRegularPolicy, policyPrepared, "after prepareNativeApp")
 	assert.Equal(t, policyBefore, policyReleased, "after releaseNativeApp")
+}
+
+// a chooser asked for once the window has gone is answered with no files at
+// once, never with a standalone modal panel.
+func TestNativeWindowlessChooserIsAnsweredAtOnce(t *testing.T) {
+	assert.Equal(t, 1, windowlessChooserAnswers)
 }
