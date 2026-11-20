@@ -37,16 +37,19 @@ func runTray(config trayConfig) error {
 	defer setReopenHandler(nil)
 
 	systray.Run(func() {
+		// first, before the menu exists: nothing can end the tray until
+		// configureTray builds Quit and the stop watcher starts below, so the
+		// deferred clear above always comes after this.
+		if config.OnReopen != nil {
+			setReopenHandler(reopenHandler(config.OnReopen, config.DaemonAddr))
+			installReopenHandler()
+		}
 		if err := configureTray(config, quit); err != nil {
 			ready <- err
 			quit()
 			return
 		}
 		ready <- nil
-		if config.OnReopen != nil {
-			setReopenHandler(reopenHandler(config.OnReopen, config.DaemonAddr))
-			installReopenHandler()
-		}
 		if config.Stop != nil {
 			go func() {
 				select {

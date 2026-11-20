@@ -90,6 +90,29 @@ static WKWebView *dfw_find_web_view(NSView *view) {
 	return nil;
 }
 
+// DFWAppHooks is what dfw_apply_app wired to one window, owned by that
+// window's controller (darwinApp) and released by dfw_detach_app. it holds
+// the window, its web view and the menu's Quit item weakly: it keeps none of
+// them alive, and reaches them without the window handle, which webview_go
+// clears as the window closes. live says the window is still dfw's to act
+// for: set as the setup is applied, cleared as the run loop returns. every
+// hook checks it, the delayed focus work, the quit handler and the UI
+// delegate, so none acts for a window whose loop has ended, even before
+// dfw_detach_app takes them down. main thread only.
+@interface DFWAppHooks : NSObject
+@property (weak) NSWindow *window;
+@property (weak) WKWebView *webView;
+@property (weak) NSMenuItem *quitItem;
+@property BOOL live;
+// the menu bar dfw installed, and the one it replaced, put back at detach.
+@property (weak) NSMenu *mainMenu;
+@property (strong) NSMenu *previousMainMenu;
+@property (strong) NSMenu *previousWindowsMenu;
+@end
+
+@implementation DFWAppHooks
+@end
+
 // DFWUIDelegate is the web view's UI delegate on macOS, in place of
 // webview_go's. that one is autoreleased as it is set, and WKWebView holds
 // its delegate weakly, so it is gone before the run loop turns: the file
@@ -101,6 +124,9 @@ static WKWebView *dfw_find_web_view(NSView *view) {
 // where a detach can answer it, and not only in the sheet's handler.
 @property (copy) void (^openPanelCompletion)(NSArray<NSURL *> *URLs);
 @property (weak) NSOpenPanel *openPanel;
+// the hooks of the window this delegate answers for; nothing is answered
+// once they are no longer live.
+@property (weak) DFWAppHooks *hooks;
 - (void)finishOpenPanel:(NSArray<NSURL *> *)URLs;
 - (void)cancelOpenPanel;
 @end
@@ -113,6 +139,11 @@ static WKWebView *dfw_find_web_view(NSView *view) {
 	runOpenPanelWithParameters:(WKOpenPanelParameters *)parameters
 	initiatedByFrame:(WKFrameInfo *)frame
 	completionHandler:(void (^)(NSArray<NSURL *> *URLs))completionHandler {
+	// a window whose run loop has ended chooses nothing.
+	if (![[self hooks] live]) {
+		completionHandler(nil);
+		return;
+	}
 	// one chooser at a time: a second request is answered with no files at
 	// once, rather than displacing the first, whose completion is still due.
 	if ([self openPanelCompletion] != nil) {
@@ -167,6 +198,9 @@ static WKWebView *dfw_find_web_view(NSView *view) {
 	createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
 	forNavigationAction:(WKNavigationAction *)action
 	windowFeatures:(WKWindowFeatures *)features {
+	if (![[self hooks] live]) {
+		return nil;
+	}
 	NSURL *url = [[action request] URL];
 	NSString *scheme = [[url scheme] lowercaseString];
 	if ([scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"] || [scheme isEqualToString:@"mailto"]) {
@@ -179,14 +213,15 @@ static WKWebView *dfw_find_web_view(NSView *view) {
 
 static char dfw_ui_delegate_key;
 
-// sets dfw's delegate on the window's web view and returns that web view, or
-// nil if the window holds none.
-static WKWebView *dfw_own_ui_delegate(NSWindow *window) {
+// sets dfw's delegate on the window's web view, answering for hooks, and
+// returns that web view, or nil if the window holds none.
+static WKWebView *dfw_own_ui_delegate(NSWindow *window, DFWAppHooks *hooks) {
 	WKWebView *web = dfw_find_web_view([window contentView]);
 	if (web == nil) {
 		return nil;
 	}
 	DFWUIDelegate *delegate = [[DFWUIDelegate alloc] init];
+	[delegate setHooks:hooks];
 	objc_setAssociatedObject(web, &dfw_ui_delegate_key, delegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 	[web setUIDelegate:delegate];
 	return web;
@@ -258,24 +293,28 @@ static const int dfw_policy_accessory = NSApplicationActivationPolicyAccessory;
 // cleanup are skipped. this one closes the window, as Quit in the menu does.
 // it is a handler and not applicationShouldTerminate:, because cancelling
 // there cancels a logout too, and a later reply would be due after the run
-// loop that has to carry it has ended. it has three states: with a window it
-// closes the window; detached, while the binding tears the window down and
-// drains its events, it ignores the event, so a late quit cannot end the
-// process before its cleanup; released, once teardown has finished, it does
+// loop that has to carry it has ended. it has three states: attached to a
+// window's hooks, it closes the window while they are live and ignores the
+// event once the window's loop has ended; detached, while the binding tears
+// the window down and drains its events, it ignores the event, so a late
+// quit cannot end the process before its cleanup; released, once teardown
+// has finished, it does
 // what AppKit's own handler does: terminate:. AppKit's handler object cannot
 // be put back without private API, so this one stands in for it, and a
 // process that outlives its window still quits.
 @interface DFWQuitHandler : NSObject
-@property (weak) NSWindow *window;
+@property (weak) DFWAppHooks *hooks;
 @property BOOL fallback;
 - (void)handleQuit:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply;
 @end
 
 @implementation DFWQuitHandler
 - (void)handleQuit:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply {
-	NSWindow *window = [self window];
-	if (window != nil) {
-		[window performClose:nil];
+	DFWAppHooks *hooks = [self hooks];
+	if (hooks != nil) {
+		if ([hooks live]) {
+			[[hooks window] performClose:nil];
+		}
 		return;
 	}
 	if ([self fallback]) {
@@ -291,11 +330,11 @@ static DFWQuitHandler *dfw_quit_handler;
 // replace this one. it has run by now: webview_go's constructor runs the
 // application until applicationDidFinishLaunching:, and the run loop that
 // Run enters later does not register it again.
-static void dfw_install_quit_handler(NSWindow *window) {
+static void dfw_install_quit_handler(DFWAppHooks *hooks) {
 	if (dfw_quit_handler == nil) {
 		dfw_quit_handler = [[DFWQuitHandler alloc] init];
 	}
-	[dfw_quit_handler setWindow:window];
+	[dfw_quit_handler setHooks:hooks];
 	[dfw_quit_handler setFallback:NO];
 	[[NSAppleEventManager sharedAppleEventManager] setEventHandler:dfw_quit_handler
 		andSelector:@selector(handleQuit:withReplyEvent:)
@@ -310,26 +349,6 @@ static void dfw_install_quit_handler(NSWindow *window) {
 static void dfw_make_closable(NSWindow *window) {
 	[window setStyleMask:[window styleMask] | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable];
 }
-
-// DFWAppHooks is what dfw_apply_app wired to one window, owned by that
-// window's controller (darwinApp) and released by dfw_detach_app. it holds
-// the window, its web view and the menu's Quit item weakly: it keeps none of
-// them alive, and reaches them without the window handle, which webview_go
-// clears as the window closes. live says the window's run loop is running;
-// its delayed focus work checks it. main thread only.
-@interface DFWAppHooks : NSObject
-@property (weak) NSWindow *window;
-@property (weak) WKWebView *webView;
-@property (weak) NSMenuItem *quitItem;
-@property BOOL live;
-// the menu bar dfw installed, and the one it replaced, put back at detach.
-@property (weak) NSMenu *mainMenu;
-@property (strong) NSMenu *previousMainMenu;
-@property (strong) NSMenu *previousWindowsMenu;
-@end
-
-@implementation DFWAppHooks
-@end
 
 // applies the macOS setup to window and returns the hooks that own it, +1 for
 // the caller. its own pool, drained before it returns: whatever must outlive
@@ -349,8 +368,9 @@ static void *dfw_apply_app(void *window) {
 		[NSApp setWindowsMenu:windows];
 		[hooks setWindow:w];
 		[hooks setQuitItem:quit];
-		[hooks setWebView:dfw_own_ui_delegate(w)];
-		dfw_install_quit_handler(w);
+		[hooks setLive:YES];
+		[hooks setWebView:dfw_own_ui_delegate(w, hooks)];
+		dfw_install_quit_handler(hooks);
 	}
 	return (__bridge_retained void *)hooks;
 }
@@ -427,7 +447,7 @@ static void dfw_release_app(void) {
 // window, and whether it has fallen back to terminate:. a quit event cannot
 // be sent once it has, because it would end the process.
 static int dfw_quit_handler_has_window(void) {
-	return [dfw_quit_handler window] != nil;
+	return [dfw_quit_handler hooks] != nil;
 }
 
 static int dfw_quit_handler_falls_back(void) {
@@ -450,8 +470,8 @@ static void dfw_detach_app(void *handle) {
 		[hooks setLive:NO];
 		// the handler is process-wide; it is cleared only while it still
 		// answers for this window.
-		if ([dfw_quit_handler window] == [hooks window]) {
-			[dfw_quit_handler setWindow:nil];
+		if ([dfw_quit_handler hooks] == hooks) {
+			[dfw_quit_handler setHooks:nil];
 		}
 		NSMenuItem *quit = [hooks quitItem];
 		[quit setTarget:nil];
@@ -506,6 +526,10 @@ static int dfw_second_test_open_panel(void) {
 static int dfw_windowless_test_open_panel(void) {
 	__block int answered = 0;
 	DFWUIDelegate *delegate = [[DFWUIDelegate alloc] init];
+	// live hooks, so the missing window, not an ended loop, is what answers.
+	DFWAppHooks *hooks = [[DFWAppHooks alloc] init];
+	[hooks setLive:YES];
+	[delegate setHooks:hooks];
 	WKWebView *web = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)
 		configuration:[[WKWebViewConfiguration alloc] init]];
 	WKOpenPanelParameters *noParameters = nil;

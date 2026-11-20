@@ -10,6 +10,8 @@ FEATURE: `DaemonApp.OnReopen` answers a running tray daemon being opened again o
 
 FIX: A macOS window that no `InitialSize` or saved state gives a size has its close and minimize buttons. It had neither, so Quit, Close and Minimize did nothing to it.
 
+FIX: A window configured with `OnCloseRequest` on a platform without close interception fails before any window opens. It used to show a window first, then fail.
+
 CHANGE: On macOS, when the tray has an icon, the title is only the tooltip. The menu bar drew it as text beside the icon, which widened the status item and hid it sooner beside a notch. A tray with no icon still shows its title.
 
 ## v0.1.6

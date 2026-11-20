@@ -58,6 +58,9 @@ var (
 	liveAfterActivate      bool
 	liveAfterEndActivation bool
 	liveAfterClose         bool
+
+	// a quit event once the window's loop has ended, before Close.
+	endedQuitCloseRequests int
 )
 
 func TestMain(m *testing.M) {
@@ -79,15 +82,17 @@ func TestMain(m *testing.M) {
 	nativeUIDelegate = describeNativeUIDelegate(window)
 	nativeWindowStyle = describeNativeWindowStyle(window)
 	nativeQuitCloseRequests = nativeQuitEventCloseRequests(window)
+	windowlessChooserAnswers = windowlessNativeTestOpenPanel()
+	armNativeTestOpenPanel(window)
+	secondChooserAnswers = secondNativeTestOpenPanel()
 	// the main queue never runs here, so the focus work Activate schedules
 	// never fires; only the flag it checks is read.
 	app.Activate()
 	liveAfterActivate = nativeAppLive(app)
 	app.EndActivation()
 	liveAfterEndActivation = nativeAppLive(app)
-	windowlessChooserAnswers = windowlessNativeTestOpenPanel()
-	armNativeTestOpenPanel(window)
-	secondChooserAnswers = secondNativeTestOpenPanel()
+	// the loop has ended, Close has not run: a quit event is ignored.
+	endedQuitCloseRequests = nativeQuitEventCloseRequests(window)
 	app.Close()
 	app.Activate()
 	liveAfterClose = nativeAppLive(app)
@@ -231,4 +236,10 @@ func TestNativeReleaseRestoresTheActivationPolicy(t *testing.T) {
 // once, never with a standalone modal panel.
 func TestNativeWindowlessChooserIsAnsweredAtOnce(t *testing.T) {
 	assert.Equal(t, 1, windowlessChooserAnswers)
+}
+
+// once the window's loop has ended, before Close takes the hooks down, a quit
+// event no longer reaches the window.
+func TestNativeQuitAfterTheLoopEndsIsIgnored(t *testing.T) {
+	assert.Equal(t, 0, endedQuitCloseRequests)
 }
