@@ -218,7 +218,10 @@ static void dfw_prepare_app(void) {
 // cleanup are skipped. this one closes the window, as Quit in the menu does.
 // it is a handler and not applicationShouldTerminate:, because cancelling
 // there cancels a logout too, and a later reply would be due after the run
-// loop that has to carry it has ended.
+// loop that has to carry it has ended. once the window is detached it has no
+// window, and does what AppKit's own handler does: terminate:. AppKit's
+// handler object cannot be put back without private API, so this one stands
+// in for it, and a process that outlives its window still quits.
 @interface DFWQuitHandler : NSObject
 @property (weak) NSWindow *window;
 - (void)handleQuit:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply;
@@ -226,7 +229,12 @@ static void dfw_prepare_app(void) {
 
 @implementation DFWQuitHandler
 - (void)handleQuit:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply {
-	[[self window] performClose:nil];
+	NSWindow *window = [self window];
+	if (window == nil) {
+		[NSApp terminate:nil];
+		return;
+	}
+	[window performClose:nil];
 }
 @end
 
@@ -267,6 +275,10 @@ static void dfw_make_closable(NSWindow *window) {
 @property (weak) WKWebView *webView;
 @property (weak) NSMenuItem *quitItem;
 @property BOOL live;
+// the menu bar dfw installed, and the one it replaced, put back at detach.
+@property (weak) NSMenu *mainMenu;
+@property (strong) NSMenu *previousMainMenu;
+@property (strong) NSMenu *previousWindowsMenu;
 @end
 
 @implementation DFWAppHooks
@@ -282,7 +294,11 @@ static void *dfw_apply_app(void *window) {
 		dfw_make_closable(w);
 		NSMenu *windows = nil;
 		NSMenuItem *quit = nil;
-		[NSApp setMainMenu:dfw_main_menu(w, &windows, &quit)];
+		NSMenu *bar = dfw_main_menu(w, &windows, &quit);
+		[hooks setPreviousMainMenu:[NSApp mainMenu]];
+		[hooks setPreviousWindowsMenu:[NSApp windowsMenu]];
+		[hooks setMainMenu:bar];
+		[NSApp setMainMenu:bar];
 		[NSApp setWindowsMenu:windows];
 		[hooks setWindow:w];
 		[hooks setQuitItem:quit];
@@ -343,17 +359,22 @@ static void dfw_end_activation(void *handle) {
 	[(__bridge DFWAppHooks *)handle setLive:NO];
 }
 
+// whether the quit handler still answers for a window, for the tests: a quit
+// event cannot be sent once it has none, because it would end the process.
+static int dfw_quit_handler_has_window(void) {
+	return [dfw_quit_handler window] != nil;
+}
+
 // whether the hooks are live, for the tests.
 static int dfw_hooks_live(void *handle) {
 	return [(__bridge DFWAppHooks *)handle live];
 }
 
 // undoes what dfw_apply_app wired to the hooks' window, before the binding
-// destroys it, and releases the hooks: the quit Apple Event and the menu's
-// Quit no longer reach the window, pending focus work does nothing, a chooser
-// still open is answered, and the web view loses dfw's UI delegate while it
-// still exists. the menus and the Apple Event handler stay installed for the
-// process, inert; AppKit's own handler is not restored, and need not be.
+// destroys it, and releases the hooks: the quit Apple Event no longer reaches
+// the window and ends the process as AppKit's would, the menu bar dfw
+// replaced is back, pending focus work does nothing, a chooser still open is
+// answered, and the web view loses dfw's UI delegate while it still exists.
 static void dfw_detach_app(void *handle) {
 	@autoreleasepool {
 		DFWAppHooks *hooks = (__bridge_transfer DFWAppHooks *)handle;
@@ -366,6 +387,11 @@ static void dfw_detach_app(void *handle) {
 		NSMenuItem *quit = [hooks quitItem];
 		[quit setTarget:nil];
 		[quit setAction:nil];
+		// the menu bar is put back only while it is still the one dfw installed.
+		if ([NSApp mainMenu] == [hooks mainMenu]) {
+			[NSApp setMainMenu:[hooks previousMainMenu]];
+			[NSApp setWindowsMenu:[hooks previousWindowsMenu]];
+		}
 		WKWebView *web = [hooks webView];
 		if (web != nil) {
 			DFWUIDelegate *delegate = objc_getAssociatedObject(web, &dfw_ui_delegate_key);
@@ -563,6 +589,10 @@ func describeNativeWindowStyle(window unsafe.Pointer) string {
 	description := C.dfw_describe_window_style(window)
 	defer C.free(unsafe.Pointer(description))
 	return C.GoString(description)
+}
+
+func nativeQuitHandlerHasWindow() bool {
+	return C.dfw_quit_handler_has_window() != 0
 }
 
 func nativeAppLive(app nativeAppController) bool {

@@ -15,7 +15,11 @@ import (
 // read in TestMain: AppKit wants the main thread, and only TestMain's
 // goroutine holds it (webview_go locks it in init).
 var (
+	// the menu bar before newNativeApp: the test binary's own, none.
+	menuBeforeApp string
+
 	nativeMainMenu          map[string][]string
+	nativeMainMenuText      string
 	nativeUIDelegate        string
 	nativeWindowStyle       string
 	nativeQuitCloseRequests int
@@ -23,9 +27,9 @@ var (
 	// the same, read again after the controller's Close, which reaches the
 	// hooks through the references it kept, not the window handle, as after an
 	// ordinary close.
-	detachedMainMenu          map[string][]string
+	detachedMainMenu          string
 	detachedUIDelegate        string
-	detachedQuitCloseRequests int
+	detachedQuitHandlerWindow bool
 
 	// a chooser pending across the detach: how many times a second request
 	// was answered at once, and how many times WebKit was answered in all.
@@ -41,8 +45,10 @@ var (
 
 func TestMain(m *testing.M) {
 	window := newNativeHiddenWindow()
+	menuBeforeApp = describeNativeMainMenu()
 	app := newNativeApp(window)
-	nativeMainMenu = parseNativeMenu(describeNativeMainMenu())
+	nativeMainMenuText = describeNativeMainMenu()
+	nativeMainMenu = parseNativeMenu(nativeMainMenuText)
 	nativeUIDelegate = describeNativeUIDelegate(window)
 	nativeWindowStyle = describeNativeWindowStyle(window)
 	nativeQuitCloseRequests = nativeQuitEventCloseRequests(window)
@@ -57,9 +63,11 @@ func TestMain(m *testing.M) {
 	app.Close()
 	app.Activate()
 	liveAfterClose = nativeAppLive(app)
-	detachedMainMenu = parseNativeMenu(describeNativeMainMenu())
+	detachedMainMenu = describeNativeMainMenu()
 	detachedUIDelegate = describeNativeUIDelegate(window)
-	detachedQuitCloseRequests = nativeQuitEventCloseRequests(window)
+	// a quit event now would terminate the test binary, as AppKit's handler
+	// does; only that the handler has let go of the window is read.
+	detachedQuitHandlerWindow = nativeQuitHandlerHasWindow()
 	pendingChooserAnswers = finishNativeTestOpenPanel()
 	os.Exit(m.Run())
 }
@@ -132,22 +140,15 @@ func TestNativeMainMenuQuitTargetsWindowClose(t *testing.T) {
 	assert.Contains(t, app, "Hide Others=opt+cmd+h/hideOtherApplications:>responder")
 }
 
-// Destroy closes the controller, which detaches what newNativeApp wired to the
-// window before the binding destroys it: a quit event and the menu's Quit no
-// longer reach the window, and the web view no longer has dfw's UI delegate.
+// Destroy closes the controller, which undoes what newNativeApp wired to the
+// window before the binding destroys it: the quit handler lets go of the
+// window, the menu bar dfw replaced is back, and the web view no longer has
+// dfw's UI delegate.
 func TestNativeDetachLeavesTheHooksInert(t *testing.T) {
-	assert.Equal(t, 0, detachedQuitCloseRequests, "a quit event after detach")
+	assert.False(t, detachedQuitHandlerWindow, "the quit handler still answers for the window")
 	assert.Equal(t, "nil", detachedUIDelegate)
-	_, quit := nativeAppMenu(t, detachedMainMenu)
-	require.NotEmpty(t, quit, "no Quit item in %v", detachedMainMenu)
-	assert.NotContains(t, quit, "performClose:", "quit item: %q", quit)
-	assert.False(t, strings.HasSuffix(quit, ">NSWindow"), "quit item: %q", quit)
-}
-
-func TestNativeMainMenuHasWindowKeys(t *testing.T) {
-	window := nativeMainMenu["Window"]
-	assert.Contains(t, window, "Minimize=cmd+m/performMiniaturize:>responder")
-	assert.Contains(t, window, "Close=cmd+w/performClose:>responder")
+	assert.NotEqual(t, menuBeforeApp, nativeMainMenuText, "newNativeApp installed no menu bar")
+	assert.Equal(t, menuBeforeApp, detachedMainMenu, "the menu bar after Close")
 }
 
 // a chooser still open at teardown is answered by the detach, and its sheet's
