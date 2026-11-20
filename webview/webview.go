@@ -39,6 +39,7 @@ type desktopWebView struct {
 	closeInterceptor nativeCloseInterceptor
 	pdf              *PDFExporter
 	fullscreen       nativeFullscreenController
+	app              nativeAppController
 	// windowed is the size and location the window opened at, saved in place
 	// of the screen's bounds when it closes fullscreen.
 	windowed core.WindowState
@@ -62,7 +63,7 @@ func newConfiguredDesktopWebView(config webviewConfig) (*desktopWebView, error) 
 		return nil, errors.New("dfw: create webview")
 	}
 	applyNativeWindowIdentity(w.Window(), appID)
-	applyNativeApp(w.Window())
+	app := newNativeApp(w.Window())
 
 	termination := config.termination
 	if termination == nil {
@@ -78,6 +79,7 @@ func newConfiguredDesktopWebView(config webviewConfig) (*desktopWebView, error) 
 		boundsTracker: newNativeWindowBoundsTracker(w.Window()),
 		termination:   termination,
 		pdf:           config.PDF,
+		app:           app,
 	}
 	if config.Title != "" {
 		window.SetTitle(config.Title)
@@ -146,7 +148,10 @@ func (w *desktopWebView) Destroy() {
 		w.boundsTracker.Close()
 		w.boundsTracker = nil
 	}
-	detachNativeApp()
+	if w.app != nil {
+		w.app.Close()
+		w.app = nil
+	}
 	w.w.Destroy()
 }
 
@@ -167,11 +172,15 @@ func (w *desktopWebView) Run() {
 	w.w.Dispatch(func() {
 		w.termination.ready()
 		w.pdf.markReady()
-		activateNativeApp(w.w.Window())
+		if w.app != nil {
+			w.app.Activate()
+		}
 	})
 	w.w.Run()
-	endNativeActivation()
 	w.endLifecycle()
+	if w.app != nil {
+		w.app.EndActivation()
+	}
 }
 
 func (w *desktopWebView) endLifecycle() {

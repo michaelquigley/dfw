@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// nativeMainMenu and nativeUIDelegate are what applyNativeApp left behind,
+// nativeMainMenu and nativeUIDelegate are what newNativeApp left behind,
 // read in TestMain: AppKit wants the main thread, and only TestMain's
 // goroutine holds it (webview_go locks it in init).
 var (
@@ -20,24 +20,47 @@ var (
 	nativeWindowStyle       string
 	nativeQuitCloseRequests int
 
-	// the same, read again after detachNativeApp, which is given no window
-	// handle, as after an ordinary close.
+	// the same, read again after the controller's Close, which reaches the
+	// hooks through the references it kept, not the window handle, as after an
+	// ordinary close.
 	detachedMainMenu          map[string][]string
 	detachedUIDelegate        string
 	detachedQuitCloseRequests int
+
+	// a chooser pending across the detach: how many times a second request
+	// was answered at once, and how many times WebKit was answered in all.
+	secondChooserAnswers  int
+	pendingChooserAnswers int
+
+	// the window's own live flag: after Activate, after EndActivation, and
+	// after Activate on a closed controller.
+	liveAfterActivate      bool
+	liveAfterEndActivation bool
+	liveAfterClose         bool
 )
 
 func TestMain(m *testing.M) {
 	window := newNativeHiddenWindow()
-	applyNativeApp(window)
+	app := newNativeApp(window)
 	nativeMainMenu = parseNativeMenu(describeNativeMainMenu())
 	nativeUIDelegate = describeNativeUIDelegate(window)
 	nativeWindowStyle = describeNativeWindowStyle(window)
 	nativeQuitCloseRequests = nativeQuitEventCloseRequests(window)
-	detachNativeApp()
+	// the main queue never runs here, so the focus work Activate schedules
+	// never fires; only the flag it checks is read.
+	app.Activate()
+	liveAfterActivate = nativeAppLive(app)
+	app.EndActivation()
+	liveAfterEndActivation = nativeAppLive(app)
+	armNativeTestOpenPanel(window)
+	secondChooserAnswers = secondNativeTestOpenPanel()
+	app.Close()
+	app.Activate()
+	liveAfterClose = nativeAppLive(app)
 	detachedMainMenu = parseNativeMenu(describeNativeMainMenu())
 	detachedUIDelegate = describeNativeUIDelegate(window)
 	detachedQuitCloseRequests = nativeQuitEventCloseRequests(window)
+	pendingChooserAnswers = finishNativeTestOpenPanel()
 	os.Exit(m.Run())
 }
 
@@ -53,7 +76,7 @@ func TestNativeQuitEventRequestsWindowClose(t *testing.T) {
 	assert.Equal(t, 1, nativeQuitCloseRequests)
 }
 
-// applyNativeApp drains its own autorelease pool before it returns, so a
+// newNativeApp drains its own autorelease pool before it returns, so a
 // delegate held only by the web view's weak reference, as webview_go's is,
 // would read nil here.
 func TestNativeUIDelegateOutlivesTheSetup(t *testing.T) {
@@ -109,9 +132,9 @@ func TestNativeMainMenuQuitTargetsWindowClose(t *testing.T) {
 	assert.Contains(t, app, "Hide Others=opt+cmd+h/hideOtherApplications:>responder")
 }
 
-// Destroy detaches what applyNativeApp wired to the window before the binding
-// destroys it: a quit event and the menu's Quit no longer reach the window,
-// and the web view no longer has dfw's UI delegate.
+// Destroy closes the controller, which detaches what newNativeApp wired to the
+// window before the binding destroys it: a quit event and the menu's Quit no
+// longer reach the window, and the web view no longer has dfw's UI delegate.
 func TestNativeDetachLeavesTheHooksInert(t *testing.T) {
 	assert.Equal(t, 0, detachedQuitCloseRequests, "a quit event after detach")
 	assert.Equal(t, "nil", detachedUIDelegate)
@@ -125,4 +148,26 @@ func TestNativeMainMenuHasWindowKeys(t *testing.T) {
 	window := nativeMainMenu["Window"]
 	assert.Contains(t, window, "Minimize=cmd+m/performMiniaturize:>responder")
 	assert.Contains(t, window, "Close=cmd+w/performClose:>responder")
+}
+
+// a chooser still open at teardown is answered by the detach, and its sheet's
+// result arriving afterwards finds nothing left to answer: WebKit's completion
+// runs exactly once.
+func TestNativeDetachAnswersAPendingChooserOnce(t *testing.T) {
+	assert.Equal(t, 1, pendingChooserAnswers)
+}
+
+// a second chooser asked for while one is open is answered with no files at
+// once, rather than displacing the first.
+func TestNativeSecondChooserIsAnsweredAtOnce(t *testing.T) {
+	assert.Equal(t, 1, secondChooserAnswers)
+}
+
+// a window's focus work checks its own live flag: set by Activate, cleared by
+// EndActivation as the run loop returns, and never set again once the
+// controller is closed.
+func TestNativeAppActivationIsTiedToItsWindow(t *testing.T) {
+	assert.True(t, liveAfterActivate, "after Activate")
+	assert.False(t, liveAfterEndActivation, "after EndActivation")
+	assert.False(t, liveAfterClose, "Activate after Close")
 }
