@@ -30,6 +30,16 @@ var (
 	detachedMainMenu          string
 	detachedUIDelegate        string
 	detachedQuitHandlerWindow bool
+	detachedQuitCloseRequests int
+	detachedQuitFallback      bool
+	// the quit handler once releaseNativeApp has run.
+	releasedQuitFallback bool
+
+	// the process's activation policy before prepareNativeApp, after it, and
+	// after releaseNativeApp.
+	policyBefore   int
+	policyPrepared int
+	policyReleased int
 
 	// a chooser pending across the detach: how many times a second request
 	// was answered at once, and how many times WebKit was answered in all.
@@ -45,6 +55,13 @@ var (
 
 func TestMain(m *testing.M) {
 	window := newNativeHiddenWindow()
+	// an accessory, as a process started from an LSUIElement bundle is. the
+	// test binary's own policy, unbundled, is prohibited, which AppKit may
+	// refuse to return to.
+	setNativeActivationPolicy(nativeAccessoryPolicy)
+	policyBefore = nativeActivationPolicy()
+	prepareNativeApp()
+	policyPrepared = nativeActivationPolicy()
 	menuBeforeApp = describeNativeMainMenu()
 	app := newNativeApp(window)
 	nativeMainMenuText = describeNativeMainMenu()
@@ -65,9 +82,15 @@ func TestMain(m *testing.M) {
 	liveAfterClose = nativeAppLive(app)
 	detachedMainMenu = describeNativeMainMenu()
 	detachedUIDelegate = describeNativeUIDelegate(window)
-	// a quit event now would terminate the test binary, as AppKit's handler
-	// does; only that the handler has let go of the window is read.
 	detachedQuitHandlerWindow = nativeQuitHandlerHasWindow()
+	detachedQuitFallback = nativeQuitHandlerFallsBack()
+	// during teardown a quit event is ignored, so it can still be sent here.
+	detachedQuitCloseRequests = nativeQuitEventCloseRequests(window)
+	releaseNativeApp()
+	// a quit event now would terminate the test binary, as AppKit's handler
+	// does; only the handler's state is read.
+	releasedQuitFallback = nativeQuitHandlerFallsBack()
+	policyReleased = nativeActivationPolicy()
 	pendingChooserAnswers = finishNativeTestOpenPanel()
 	os.Exit(m.Run())
 }
@@ -146,6 +169,8 @@ func TestNativeMainMenuQuitTargetsWindowClose(t *testing.T) {
 // dfw's UI delegate.
 func TestNativeDetachLeavesTheHooksInert(t *testing.T) {
 	assert.False(t, detachedQuitHandlerWindow, "the quit handler still answers for the window")
+	assert.False(t, detachedQuitFallback, "the quit handler would terminate during teardown")
+	assert.Equal(t, 0, detachedQuitCloseRequests, "a quit event during teardown")
 	assert.Equal(t, "nil", detachedUIDelegate)
 	assert.NotEqual(t, menuBeforeApp, nativeMainMenuText, "newNativeApp installed no menu bar")
 	assert.Equal(t, menuBeforeApp, detachedMainMenu, "the menu bar after Close")
@@ -171,4 +196,17 @@ func TestNativeAppActivationIsTiedToItsWindow(t *testing.T) {
 	assert.True(t, liveAfterActivate, "after Activate")
 	assert.False(t, liveAfterEndActivation, "after EndActivation")
 	assert.False(t, liveAfterClose, "Activate after Close")
+}
+
+// once teardown has finished, the quit handler stands in for AppKit's and ends
+// the process on a quit event.
+func TestNativeReleaseFallsBackToTerminate(t *testing.T) {
+	assert.True(t, releasedQuitFallback)
+}
+
+// the window process takes the regular policy for its window, and gives back
+// the one it replaced once the window is gone.
+func TestNativeReleaseRestoresTheActivationPolicy(t *testing.T) {
+	assert.Equal(t, nativeRegularPolicy, policyPrepared, "after prepareNativeApp")
+	assert.Equal(t, policyBefore, policyReleased, "after releaseNativeApp")
 }

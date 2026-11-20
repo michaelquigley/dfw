@@ -24,7 +24,7 @@ The daemon's address is logged at startup and written to `daemon.json` under `~/
 ## Sequence
 
 1. Start the bundle. The menu bar shows the icon (a teal square on dark) with no text beside it; there is no Dock icon. The menu reads `Open Window`, `Quit`.
-2. Click a Finder window, so another application has the focus. Choose `Open Window`. The window comes to the front with a Dock icon and the menu bar, and the log reads `page: loaded`. Press Cmd+K at once, without clicking: the log shows the key, so the keyboard is in the page, not in Finder. No menu binds Cmd+K, so only the page can have logged it.
+2. Click a Finder window, so another application has the focus. Choose `Open Window`. The window comes to the front with a Dock icon and the menu bar, and the log reads `page: 'loaded'`. Press Cmd+K at once, without clicking: the log shows the key, so the keyboard is in the page, not in Finder. No menu binds Cmd+K, so only the page can have logged it.
 3. Click the first box and press Cmd+A and Cmd+C. Click the second, then press Cmd+V and Cmd+Z. The text is copied, pasted and undone; the log shows the copy and the paste.
 4. Click the `target="_blank"` link, then the `window.open` button. Each opens `example.com` in the default browser; the window stays on its page.
 5. Use each file chooser. A sheet opens on the window: files for the first, folders for the second. Choosing returns the count to the page and to the log.

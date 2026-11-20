@@ -96,7 +96,7 @@ func handleReport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	dl.Infof("page: %s", r.URL.Query().Get("m"))
+	dl.Infof("page: '%s'", r.URL.Query().Get("m"))
 	w.WriteHeader(http.StatusNoContent)
 }
 

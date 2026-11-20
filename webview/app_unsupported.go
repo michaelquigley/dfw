@@ -9,4 +9,6 @@ import "unsafe"
 
 func prepareNativeApp() {}
 
+func releaseNativeApp() {}
+
 func newNativeApp(_ unsafe.Pointer) nativeAppController { return nil }

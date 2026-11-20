@@ -206,10 +206,31 @@ static char *dfw_describe_ui_delegate(void *window) {
 // a bundle with LSUIElement, as a menu bar daemon has, makes every process
 // it starts an accessory, and webview_go leaves a bundled application's
 // activation policy alone. the window process is the visible application,
-// so it takes the regular policy: a Dock icon and a menu bar.
+// so it takes the regular policy: a Dock icon and a menu bar. the policy is
+// the process's, so the one it replaced is kept for dfw_release_app to put
+// back once the window is gone.
+static NSApplicationActivationPolicy dfw_previous_policy;
+static BOOL dfw_policy_saved;
+
 static void dfw_prepare_app(void) {
-	[[NSApplication sharedApplication] setActivationPolicy:NSApplicationActivationPolicyRegular];
+	NSApplication *app = [NSApplication sharedApplication];
+	dfw_previous_policy = [app activationPolicy];
+	dfw_policy_saved = YES;
+	[app setActivationPolicy:NSApplicationActivationPolicyRegular];
 }
+
+// the process's activation policy, read and set for the tests.
+static int dfw_activation_policy(void) {
+	return (int)[[NSApplication sharedApplication] activationPolicy];
+}
+
+static void dfw_set_activation_policy(int policy) {
+	[[NSApplication sharedApplication] setActivationPolicy:(NSApplicationActivationPolicy)policy];
+}
+
+// plain ints, so cgo need not read AppKit's NS_ENUM.
+static const int dfw_policy_regular = NSApplicationActivationPolicyRegular;
+static const int dfw_policy_accessory = NSApplicationActivationPolicyAccessory;
 
 // DFWQuitHandler answers the quit Apple Event, which the Dock's Quit, a
 // logout or restart, and `quit app` from a script send. NSApplication's own
@@ -218,23 +239,29 @@ static void dfw_prepare_app(void) {
 // cleanup are skipped. this one closes the window, as Quit in the menu does.
 // it is a handler and not applicationShouldTerminate:, because cancelling
 // there cancels a logout too, and a later reply would be due after the run
-// loop that has to carry it has ended. once the window is detached it has no
-// window, and does what AppKit's own handler does: terminate:. AppKit's
-// handler object cannot be put back without private API, so this one stands
-// in for it, and a process that outlives its window still quits.
+// loop that has to carry it has ended. it has three states: with a window it
+// closes the window; detached, while the binding tears the window down and
+// drains its events, it ignores the event, so a late quit cannot end the
+// process before its cleanup; released, once teardown has finished, it does
+// what AppKit's own handler does: terminate:. AppKit's handler object cannot
+// be put back without private API, so this one stands in for it, and a
+// process that outlives its window still quits.
 @interface DFWQuitHandler : NSObject
 @property (weak) NSWindow *window;
+@property BOOL fallback;
 - (void)handleQuit:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply;
 @end
 
 @implementation DFWQuitHandler
 - (void)handleQuit:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply {
 	NSWindow *window = [self window];
-	if (window == nil) {
-		[NSApp terminate:nil];
+	if (window != nil) {
+		[window performClose:nil];
 		return;
 	}
-	[window performClose:nil];
+	if ([self fallback]) {
+		[NSApp terminate:nil];
+	}
 }
 @end
 
@@ -250,6 +277,7 @@ static void dfw_install_quit_handler(NSWindow *window) {
 		dfw_quit_handler = [[DFWQuitHandler alloc] init];
 	}
 	[dfw_quit_handler setWindow:window];
+	[dfw_quit_handler setFallback:NO];
 	[[NSAppleEventManager sharedAppleEventManager] setEventHandler:dfw_quit_handler
 		andSelector:@selector(handleQuit:withReplyEvent:)
 		forEventClass:kCoreEventClass
@@ -359,10 +387,32 @@ static void dfw_end_activation(void *handle) {
 	[(__bridge DFWAppHooks *)handle setLive:NO];
 }
 
-// whether the quit handler still answers for a window, for the tests: a quit
-// event cannot be sent once it has none, because it would end the process.
+// called once the binding has destroyed the window and teardown has finished:
+// a quit event from now on ends the process, as AppKit's own handler would.
+// nothing in dfw services events after this, so it applies only to an event
+// loop the product runs itself.
+//
+// the activation policy prepare replaced is put back too, so a menu bar
+// process that outlives its window loses the Dock icon it gained for it.
+// AppKit may refuse the switch back (an unbundled process returning to
+// prohibited, say); nothing depends on it succeeding.
+static void dfw_release_app(void) {
+	[dfw_quit_handler setFallback:YES];
+	if (dfw_policy_saved) {
+		dfw_policy_saved = NO;
+		[[NSApplication sharedApplication] setActivationPolicy:dfw_previous_policy];
+	}
+}
+
+// the quit handler's state, for the tests: whether it still answers for a
+// window, and whether it has fallen back to terminate:. a quit event cannot
+// be sent once it has, because it would end the process.
 static int dfw_quit_handler_has_window(void) {
 	return [dfw_quit_handler window] != nil;
+}
+
+static int dfw_quit_handler_falls_back(void) {
+	return [dfw_quit_handler fallback];
 }
 
 // whether the hooks are live, for the tests.
@@ -528,6 +578,13 @@ func prepareNativeApp() {
 	C.dfw_prepare_app()
 }
 
+// releaseNativeApp runs on the UI thread once the binding has destroyed the
+// window, or when no webview could be made: it winds down what
+// prepareNativeApp and newNativeApp set up for the whole process.
+func releaseNativeApp() {
+	C.dfw_release_app()
+}
+
 // darwinApp owns the DFWAppHooks that dfw_apply_app returned for one window.
 // its methods run on the UI thread.
 type darwinApp struct {
@@ -593,6 +650,24 @@ func describeNativeWindowStyle(window unsafe.Pointer) string {
 
 func nativeQuitHandlerHasWindow() bool {
 	return C.dfw_quit_handler_has_window() != 0
+}
+
+func nativeActivationPolicy() int {
+	return int(C.dfw_activation_policy())
+}
+
+func setNativeActivationPolicy(policy int) {
+	C.dfw_set_activation_policy(C.int(policy))
+}
+
+// NSApplicationActivationPolicyRegular and ...Accessory, for the tests.
+var (
+	nativeRegularPolicy   = int(C.dfw_policy_regular)
+	nativeAccessoryPolicy = int(C.dfw_policy_accessory)
+)
+
+func nativeQuitHandlerFallsBack() bool {
+	return C.dfw_quit_handler_falls_back() != 0
 }
 
 func nativeAppLive(app nativeAppController) bool {

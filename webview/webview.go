@@ -60,6 +60,7 @@ func newConfiguredDesktopWebView(config webviewConfig) (*desktopWebView, error) 
 
 	w := webview.New(config.Debug)
 	if w == nil {
+		releaseNativeApp()
 		return nil, errors.New("dfw: create webview")
 	}
 	applyNativeWindowIdentity(w.Window(), appID)
@@ -153,6 +154,8 @@ func (w *desktopWebView) Destroy() {
 		w.app = nil
 	}
 	w.w.Destroy()
+	// only now, with teardown finished, may a quit end the process.
+	releaseNativeApp()
 }
 
 func (w *desktopWebView) Navigate(url string) {
