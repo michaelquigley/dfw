@@ -87,7 +87,7 @@ Building the webview portion requires a CGO-capable toolchain plus the platform'
 
 ## Status
 
-Initial implementation. The library is feature-complete for the v1 scope on Linux and Windows. On macOS the tray daemon and its windows work, from a bare binary or from an application bundle: a window process is a regular application with the standard application, Edit and Window menus, takes the focus when it opens, opens the file chooser, and sends links that open a new window to the default browser. Window position is not persisted there, and `OnCloseRequest` fails window setup. [`examples/dfw-example-macos`](examples/dfw-example-macos) is the native fixture; see [Runtime › macOS windows](docs/current/runtime.md#macos-windows).
+Initial implementation. The library is feature-complete for the v1 scope on Linux and Windows. On macOS the tray daemon and its windows work, from a bare binary or from an application bundle: a window process is a regular application with the standard application, Edit and Window menus, takes the focus when it opens, opens the file chooser, and sends links that open a new window to the default browser. Window size and position are not persisted there, and `OnCloseRequest` fails window setup before any window opens. [`examples/dfw-example-macos`](examples/dfw-example-macos) is the native fixture; see [Runtime › macOS windows](docs/current/runtime.md#macos-windows).
 
 ## Documentation
 

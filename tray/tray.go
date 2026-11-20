@@ -16,7 +16,7 @@ type trayConfig struct {
 	SpawnWindow func(daemonAddr string) error
 	TrayItems   []TrayMenuItem
 	OnQuit      func() bool
-	OnReopen    func()
+	OnReopen    func(daemonAddr string)
 	Control     *Control
 	Stop        <-chan struct{}
 }
@@ -32,6 +32,9 @@ func runTray(config trayConfig) error {
 		config.Control.end()
 		systray.Quit()
 	}
+	// on macOS systray's Quit stops the loop without running onExit, so the
+	// reopen handler is cleared here as well, once the loop has returned.
+	defer setReopenHandler(nil)
 
 	systray.Run(func() {
 		if err := configureTray(config, quit); err != nil {
@@ -41,7 +44,7 @@ func runTray(config trayConfig) error {
 		}
 		ready <- nil
 		if config.OnReopen != nil {
-			setReopenHandler(config.OnReopen)
+			setReopenHandler(reopenHandler(config.OnReopen, config.DaemonAddr))
 			installReopenHandler()
 		}
 		if config.Stop != nil {

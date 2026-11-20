@@ -1,6 +1,7 @@
 package webview
 
 import (
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -390,5 +391,17 @@ func TestCloseRequestEndRacesResolution(t *testing.T) {
 				assertLifecycleEnded(t, controller, terminated, want)
 			}
 		})
+	}
+}
+
+// a platform that cannot intercept the close says so before any window is
+// made, so newConfiguredDesktopWebView fails without showing one.
+func TestCheckNativeCloseInterceptionBeforeAnyWindow(t *testing.T) {
+	err := checkNativeCloseInterception()
+	switch runtime.GOOS {
+	case "linux", "windows":
+		assert.NoError(t, err)
+	default:
+		assert.EqualError(t, err, "dfw: close request interception is not supported on '"+runtime.GOOS+"'")
 	}
 }

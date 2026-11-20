@@ -30,9 +30,10 @@ type DaemonApp struct {
 	// its daemon runs, from Finder, the Dock, Spotlight, Launchpad or open:
 	// macOS starts no second process then, it tells the running one, and
 	// without OnReopen nothing visible happens. the usual answer opens a
-	// window. it runs on a goroutine of its own. other platforms never call
-	// it; a nil OnReopen leaves reopening as it was.
-	OnReopen func()
+	// window, as SpawnWindow does with the same daemonAddr. it runs on a
+	// goroutine of its own. other platforms never call it; a nil OnReopen
+	// leaves reopening as it was.
+	OnReopen func(daemonAddr string)
 	// Control optionally lets the application change the tray icon, tooltip,
 	// and TrayItems while the daemon runs, and end the daemon itself. see
 	// NewControl.

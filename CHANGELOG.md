@@ -6,7 +6,7 @@ FEATURE: Windows work on macOS, from a bare binary or from an application bundle
 
 FIX: The file chooser opens on macOS. webview_go's UI delegate was released as soon as it was set, so `<input type="file">` did nothing; dfw now sets and holds its own, which opens a sheet on the window and also answers the new-window links above.
 
-FEATURE: `DaemonApp.OnReopen` answers a running tray daemon being opened again on macOS, from Finder, the Dock, Spotlight, Launchpad or `open`. macOS starts no second process then and reports the reopen to the running one, where nothing visible happened before; the usual answer opens a window. Other platforms never call it.
+FEATURE: `DaemonApp.OnReopen` answers a running tray daemon being opened again on macOS, from Finder, the Dock, Spotlight, Launchpad or `open`. macOS starts no second process then and reports the reopen to the running one, where nothing visible happened before. It receives the daemon's address, as `SpawnWindow` does, so the usual answer opens a window. Other platforms never call it.
 
 FIX: A macOS window that no `InitialSize` or saved state gives a size has its close and minimize buttons. It had neither, so Quit, Close and Minimize did nothing to it.
 

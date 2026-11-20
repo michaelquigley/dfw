@@ -19,6 +19,12 @@ var (
 	nativeUIDelegate        string
 	nativeWindowStyle       string
 	nativeQuitCloseRequests int
+
+	// the same, read again after detachNativeApp, which is given no window
+	// handle, as after an ordinary close.
+	detachedMainMenu          map[string][]string
+	detachedUIDelegate        string
+	detachedQuitCloseRequests int
 )
 
 func TestMain(m *testing.M) {
@@ -28,6 +34,10 @@ func TestMain(m *testing.M) {
 	nativeUIDelegate = describeNativeUIDelegate(window)
 	nativeWindowStyle = describeNativeWindowStyle(window)
 	nativeQuitCloseRequests = nativeQuitEventCloseRequests(window)
+	detachNativeApp()
+	detachedMainMenu = parseNativeMenu(describeNativeMainMenu())
+	detachedUIDelegate = describeNativeUIDelegate(window)
+	detachedQuitCloseRequests = nativeQuitEventCloseRequests(window)
 	os.Exit(m.Run())
 }
 
@@ -39,7 +49,7 @@ func TestNativeWindowIsClosableWithoutASize(t *testing.T) {
 // the Dock's Quit and a logout send the quit Apple Event. NSApplication's
 // own handler would call terminate: and end the process inside the run loop;
 // dfw's asks the window to close, once.
-func TestNativeQuitEventClosesTheWindow(t *testing.T) {
+func TestNativeQuitEventRequestsWindowClose(t *testing.T) {
 	assert.Equal(t, 1, nativeQuitCloseRequests)
 }
 
@@ -74,25 +84,41 @@ func TestNativeMainMenuHasEditKeys(t *testing.T) {
 	}
 }
 
-func TestNativeMainMenuQuitClosesTheWindow(t *testing.T) {
-	var app []string
-	for title, items := range nativeMainMenu {
+// nativeAppMenu is the application menu, the one that is neither Edit nor
+// Window, and its Quit item.
+func nativeAppMenu(t *testing.T, menus map[string][]string) (app []string, quit string) {
+	for title, items := range menus {
 		if title != "Edit" && title != "Window" {
 			app = items
 		}
 	}
-	require.NotEmpty(t, app, "no application menu in %v", nativeMainMenu)
-
-	var quit string
+	require.NotEmpty(t, app, "no application menu in %v", menus)
 	for _, item := range app {
 		if strings.HasPrefix(item, "Quit ") {
 			quit = item
 		}
 	}
+	return app, quit
+}
+
+func TestNativeMainMenuQuitTargetsWindowClose(t *testing.T) {
+	app, quit := nativeAppMenu(t, nativeMainMenu)
 	// Quit is the window's own close, never NSApp terminate:, which would end
 	// the process before Window returns and saves its state.
 	assert.True(t, strings.HasSuffix(quit, "=cmd+q/performClose:>NSWindow"), "quit item: %q", quit)
 	assert.Contains(t, app, "Hide Others=opt+cmd+h/hideOtherApplications:>responder")
+}
+
+// Destroy detaches what applyNativeApp wired to the window before the binding
+// destroys it: a quit event and the menu's Quit no longer reach the window,
+// and the web view no longer has dfw's UI delegate.
+func TestNativeDetachLeavesTheHooksInert(t *testing.T) {
+	assert.Equal(t, 0, detachedQuitCloseRequests, "a quit event after detach")
+	assert.Equal(t, "nil", detachedUIDelegate)
+	_, quit := nativeAppMenu(t, detachedMainMenu)
+	require.NotEmpty(t, quit, "no Quit item in %v", detachedMainMenu)
+	assert.NotContains(t, quit, "performClose:", "quit item: %q", quit)
+	assert.False(t, strings.HasSuffix(quit, ">NSWindow"), "quit item: %q", quit)
 }
 
 func TestNativeMainMenuHasWindowKeys(t *testing.T) {

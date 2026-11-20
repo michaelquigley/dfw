@@ -51,9 +51,6 @@ func main() {
 	}
 }
 
-// daemonAddr is where the daemon listens, for the window a reopen starts.
-var daemonAddr string
-
 func daemon() error {
 	icon, err := iconPNG()
 	if err != nil {
@@ -68,7 +65,7 @@ func daemon() error {
 		SpawnWindow: spawn,
 		// opening the bundle again, from Finder or open, opens a window as
 		// Open Window does.
-		OnReopen: func() {
+		OnReopen: func(daemonAddr string) {
 			if err := spawn(daemonAddr); err != nil {
 				dl.Errorf("opening a window on reopen: %v", err)
 			}
@@ -81,7 +78,6 @@ func listen() (*http.Server, net.Listener, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	daemonAddr = listener.Addr().String()
 	dl.Infof("listening on 'http://%s'", listener.Addr())
 
 	mux := http.NewServeMux()

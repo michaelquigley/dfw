@@ -45,6 +45,13 @@ type desktopWebView struct {
 }
 
 func newConfiguredDesktopWebView(config webviewConfig) (*desktopWebView, error) {
+	// before anything native: webview.New shows the window on macOS, and a
+	// window that asked to guard its close must not open where it cannot.
+	if config.OnCloseRequest != nil {
+		if err := checkNativeCloseInterception(); err != nil {
+			return nil, err
+		}
+	}
 	appID := strings.TrimSpace(config.AppID)
 	prepareNativeWindowIdentity(appID)
 	prepareNativeJavaScriptSignals()
@@ -118,9 +125,9 @@ func newConfiguredDesktopWebView(config webviewConfig) (*desktopWebView, error) 
 }
 
 // Destroy ends the window lifecycle, detaches close interception ahead of the
-// bounds, zoom, and fullscreen controllers, and only then destroys the
-// underlying webview, so native teardown never reaches application code as a
-// close request.
+// bounds, zoom, and fullscreen controllers and the macOS application hooks,
+// and only then destroys the underlying webview, so native teardown never
+// reaches application code as a close request.
 func (w *desktopWebView) Destroy() {
 	w.endLifecycle()
 	if w.closeInterceptor != nil {
@@ -139,6 +146,7 @@ func (w *desktopWebView) Destroy() {
 		w.boundsTracker.Close()
 		w.boundsTracker = nil
 	}
+	detachNativeApp()
 	w.w.Destroy()
 }
 
@@ -159,9 +167,10 @@ func (w *desktopWebView) Run() {
 	w.w.Dispatch(func() {
 		w.termination.ready()
 		w.pdf.markReady()
-		activateNativeApp()
+		activateNativeApp(w.w.Window())
 	})
 	w.w.Run()
+	endNativeActivation()
 	w.endLifecycle()
 }
 

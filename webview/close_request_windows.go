@@ -14,6 +14,12 @@ type windowsCloseInterceptor struct {
 	tracker *windowsWindowBoundsTracker
 }
 
+// checkNativeCloseInterception reports whether a close interceptor can be
+// installed here, before any window exists. windows always can.
+func checkNativeCloseInterception() error {
+	return nil
+}
+
 func newNativeCloseInterceptor(window unsafe.Pointer, request func() bool) (nativeCloseInterceptor, error) {
 	if !validNativeWindow(window) {
 		return nil, errors.New("dfw: install close interceptor on 'windows': no native window")

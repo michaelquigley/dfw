@@ -38,6 +38,33 @@ jobs:
         with:
           files: coverage.out
 
+  # the only place the darwin code builds and its native tests run, until
+  # there is a mac for development. the darwin TestMain makes AppKit windows,
+  # which needs the runner's logged-in GUI session.
+  test-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: examples/dfw-example-watch/web/package-lock.json
+
+      - name: Build example frontend
+        run: |
+          npm --prefix examples/dfw-example-watch/web ci
+          npm --prefix examples/dfw-example-watch/web run build
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - run: go mod download
+      - run: make test
+      - run: go test -race ./...
+
   lint:
     runs-on: ubuntu-latest
     steps:

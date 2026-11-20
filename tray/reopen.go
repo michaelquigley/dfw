@@ -15,6 +15,12 @@ func setReopenHandler(handler func()) {
 	reopen.handler = handler
 }
 
+// reopenHandler binds the product's OnReopen to the daemon's address, which
+// the native event does not carry.
+func reopenHandler(onReopen func(daemonAddr string), daemonAddr string) func() {
+	return func() { onReopen(daemonAddr) }
+}
+
 // reopened runs the handler, if any, on a goroutine of its own, so the
 // native event loop that delivered the event never waits on the product.
 func reopened() {

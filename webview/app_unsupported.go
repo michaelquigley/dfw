@@ -11,4 +11,8 @@ func prepareNativeApp() {}
 
 func applyNativeApp(_ unsafe.Pointer) {}
 
-func activateNativeApp() {}
+func detachNativeApp() {}
+
+func activateNativeApp(_ unsafe.Pointer) {}
+
+func endNativeActivation() {}

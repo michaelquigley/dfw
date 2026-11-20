@@ -82,7 +82,7 @@ The product remains a normal Go HTTP service; `dfw` just gives it a window.
 `dfw` v1 deliberately does not provide:
 
 - A JavaScript-to-Go bridge. The web UI talks to the product's HTTP API, not to Go through a postMessage channel.
-- General-purpose native menus or dialogs. The opt-in PDF destination chooser is the one file-dialog exception, earned by gloss's document-export workflow; other file pickers, modals, and context menus remain product concerns. A macOS window carries fixed standard menus (application, Edit, Window), earned by mega's window: without an Edit menu, WebKit on macOS receives no Copy, Paste or Select All. Products cannot change them.
+- General-purpose native menus or dialogs. The opt-in PDF destination chooser is the one file dialog dfw adds, earned by gloss's document-export workflow. The page's own `<input type="file">` chooser is not an exception: WebKitGTK and WebView2 show it themselves, and on macOS, where WKWebView leaves it to the embedder, dfw supplies it so the page behaves the same. Other file pickers, modals, and context menus remain product concerns. A macOS window carries fixed standard menus (application, Edit, Window), earned by mega's window: without an Edit menu, WebKit on macOS receives no Copy, Paste or Select All. Products cannot change them.
 - Request proxying. The webview navigates to the HTTP server directly.
 - Single-instance enforcement. Products that need this implement it themselves (lock files, port detection, named mutex on Windows, etc.).
 - Multi-window in a single process. `Run` is one window; multi-window scenarios use `Daemon` + multiple `Window` processes.

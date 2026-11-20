@@ -17,9 +17,9 @@ No additional setup beyond the platform prerequisites below.
 
 ## Continuous Integration
 
-GitHub Actions runs on every push and pull request. The test job installs the Linux GTK and WebKitGTK development packages, builds the ignored React bundle used by `dfw-example-watch`, runs the ordinary `make test` gate, then repeats the complete Go suite under the race detector with coverage. A separate lint job prepares the same native and frontend inputs before running `golangci-lint`.
+GitHub Actions runs on every push and pull request. The test job installs the Linux GTK and WebKitGTK development packages, builds the ignored React bundle used by `dfw-example-watch`, runs the ordinary `make test` gate, then repeats the complete Go suite under the race detector with coverage. A separate lint job prepares the same native and frontend inputs before running `golangci-lint`. A `test-macos` job runs the same `make test` gate and the race suite on `macos-latest`. It is the only place the darwin code builds and its native tests run until there is a Mac for development.
 
-The hosted gate exercises the Linux native build. Windows remains a real-platform check: before a release, build and run the native fixtures on Windows as described by their READMEs.
+The hosted gate exercises the Linux and macOS native builds. Windows remains a real-platform check: before a release, build and run the native fixtures on Windows as described by their READMEs.
 
 ## Linux
 
@@ -76,9 +76,9 @@ This is a binary-level choice. For a single binary with subcommands (as in the e
 
 ## macOS
 
-The webview is WKWebView and the tray is an `NSStatusItem` in the menu bar, both through system frameworks (Cocoa, WebKit). A CGO-capable toolchain is the only prerequisite: the Xcode Command Line Tools (`xcode-select --install`) supply `clang` and the SDK. `dfw/tray` needs cgo here too, unlike on Linux.
+The webview is WKWebView and the tray is an `NSStatusItem` in the menu bar, both through system frameworks (Cocoa, WebKit). A CGO-capable toolchain is the only prerequisite: the Xcode Command Line Tools (`xcode-select --install`) supply `clang` and the SDK. `dfw/tray` needs cgo here too, unlike on Linux. Building needs only the Xcode Command Line Tools. Running the `webview` tests also needs a logged-in GUI session, because the darwin `TestMain` creates an AppKit window before any test runs, and without a session it fails.
 
-Window position is not persisted (the `_unsupported` build tags fill in noop implementations for window-bounds tracking, window icons and tray icon conversion), PDF export is Linux-only, and a configured `OnCloseRequest` fails window setup rather than opening a window that closes without asking. What a window does on macOS is in [runtime.md](runtime.md#macos-windows).
+Window size and position are not persisted (the `_unsupported` build tags fill in noop implementations for window-bounds tracking, window icons and tray icon conversion), PDF export is Linux-only, and a configured `OnCloseRequest` fails window setup before any window opens, rather than opening a window that closes without asking. What a window does on macOS is in [runtime.md](runtime.md#macos-windows).
 
 ### Application bundles
 

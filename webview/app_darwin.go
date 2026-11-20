@@ -34,6 +34,9 @@ static NSMenuItem *dfw_menu_item(NSMenu *menu, NSString *title, SEL action, NSSt
 // receives no Cut, Copy, Paste, Select All or Undo key equivalents. Quit
 // closes window, the one this process owns, rather than terminating the
 // application, so the run loop ends the way the close button ends it.
+// the menu's Quit item, held weakly, so dfw_detach_app can disarm it.
+static __weak NSMenuItem *dfw_quit_item;
+
 static NSMenu *dfw_main_menu(NSWindow *window, NSMenu **windowsMenu) {
 	NSString *name = dfw_app_name();
 	NSEventModifierFlags cmd = NSEventModifierFlagCommand;
@@ -49,6 +52,7 @@ static NSMenu *dfw_main_menu(NSWindow *window, NSMenu **windowsMenu) {
 	[app addItem:[NSMenuItem separatorItem]];
 	NSMenuItem *quit = dfw_menu_item(app, [@"Quit " stringByAppendingString:name], @selector(performClose:), @"q", 0);
 	[quit setTarget:window];
+	dfw_quit_item = quit;
 	[appItem setSubmenu:app];
 
 	NSMenuItem *editItem = [bar addItemWithTitle:@"" action:nil keyEquivalent:@""];
@@ -138,11 +142,17 @@ static WKWebView *dfw_find_web_view(NSView *view) {
 
 static char dfw_ui_delegate_key;
 
+// the web view dfw's delegate was set on, held weakly, so dfw_detach_app can
+// reach it without the window handle, which webview_go clears as the window
+// closes. a process has one window, so one web view.
+static __weak WKWebView *dfw_web_view;
+
 static void dfw_own_ui_delegate(NSWindow *window) {
 	WKWebView *web = dfw_find_web_view([window contentView]);
 	if (web == nil) {
 		return;
 	}
+	dfw_web_view = web;
 	DFWUIDelegate *delegate = [[DFWUIDelegate alloc] init];
 	objc_setAssociatedObject(web, &dfw_ui_delegate_key, delegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 	[web setUIDelegate:delegate];
@@ -169,7 +179,7 @@ static void dfw_prepare_app(void) {
 	[[NSApplication sharedApplication] setActivationPolicy:NSApplicationActivationPolicyRegular];
 }
 
-nm// DFWQuitHandler answers the quit Apple Event, which the Dock's Quit, a
+// DFWQuitHandler answers the quit Apple Event, which the Dock's Quit, a
 // logout or restart, and `quit app` from a script send. NSApplication's own
 // handler calls terminate:, which exits inside the run loop before Window or
 // Run returns, so the window state, the server's shutdown and every deferred
@@ -228,38 +238,81 @@ static void dfw_apply_app(void *window) {
 	}
 }
 
-static void dfw_front(void) {
+// whether the run loop dfw_activate_app was called for is still running; read
+// and written on the main thread only.
+static BOOL dfw_activation_live;
+
+// brings window, and only window, to the front with the keyboard in its page.
+// webview_go shows the window before the run loop starts, so a window that is
+// no longer visible has been closed or minimized since, and is left alone.
+static void dfw_front(NSWindow *window) {
+	if (window == nil || ![window isVisible]) {
+		return;
+	}
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 	// cooperative activation ([NSApp activate]) is refused here: nothing
 	// yields to a process the daemon started. this one is honoured.
 	[NSApp activateIgnoringOtherApps:YES];
 #pragma clang diagnostic pop
-	for (NSWindow *w in [NSApp windows]) {
-		if (![w canBecomeMainWindow]) {
-			continue;
-		}
-		[w makeKeyAndOrderFront:nil];
-		WKWebView *web = dfw_find_web_view([w contentView]);
-		if (web != nil) {
-			[w makeFirstResponder:web];
-		}
+	[window makeKeyAndOrderFront:nil];
+	WKWebView *web = dfw_find_web_view([window contentView]);
+	if (web != nil) {
+		[window makeFirstResponder:web];
 	}
 }
 
 // brings the window to the front with the keyboard in the page, once the run
 // loop turns. a window opened from a tray menu loses the activation to the
 // application that was active before the menu, as the menu closes, so it is
-// taken once more if it was lost within the first moment.
-static void dfw_activate_app(void) {
+// taken once more if it was lost within the first moment. the blocks hold the
+// window weakly, so they neither keep it alive nor act on it once it is gone.
+static void dfw_activate_app(void *window) {
+	__weak NSWindow *target = (__bridge NSWindow *)window;
+	dfw_activation_live = YES;
 	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 200 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
-		dfw_front();
-	});
-	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 800 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
-		if (![NSApp isActive]) {
-			dfw_front();
+		if (dfw_activation_live) {
+			dfw_front(target);
 		}
 	});
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 800 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+		if (dfw_activation_live && ![NSApp isActive]) {
+			dfw_front(target);
+		}
+	});
+}
+
+// called on the main thread as Run's loop returns. a window can outlive its
+// loop still visible (a server failure ends the loop, Destroy comes after),
+// so visibility alone does not say the window is still dfw's to bring forward.
+static void dfw_end_activation(void) {
+	dfw_activation_live = NO;
+}
+
+// undoes what dfw_apply_app wired to the window, before the binding destroys it,
+// as every other native controller is detached in Destroy: the quit Apple
+// Event and the menu's Quit no longer reach it, pending focus work does
+// nothing, and the web view loses dfw's UI delegate while it still exists.
+// the menus and the Apple Event handler stay installed for the process,
+// inert; AppKit's own handler is not restored, and need not be.
+//
+// it takes no window: by the time Destroy runs after an ordinary close,
+// webview_go has cleared its window handle, so the hooks are reached through
+// the references kept as they were installed.
+static void dfw_detach_app(void) {
+	@autoreleasepool {
+		dfw_activation_live = NO;
+		[dfw_quit_handler setWindow:nil];
+		NSMenuItem *quit = dfw_quit_item;
+		[quit setTarget:nil];
+		[quit setAction:nil];
+		WKWebView *web = dfw_web_view;
+		dfw_web_view = nil;
+		if (web != nil) {
+			[web setUIDelegate:nil];
+			objc_setAssociatedObject(web, &dfw_ui_delegate_key, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		}
+	}
 }
 
 // a window that is never shown, titled only and holding a web view as
@@ -361,8 +414,24 @@ func applyNativeApp(window unsafe.Pointer) {
 }
 
 // activateNativeApp runs on the UI thread as the run loop starts.
-func activateNativeApp() {
-	C.dfw_activate_app()
+func activateNativeApp(window unsafe.Pointer) {
+	if window == nil {
+		return
+	}
+	C.dfw_activate_app(window)
+}
+
+// detachNativeApp undoes applyNativeApp on the UI thread, before the binding
+// destroys the window. it needs no window handle, which is nil by then after
+// an ordinary close.
+func detachNativeApp() {
+	C.dfw_detach_app()
+}
+
+// endNativeActivation runs on the UI thread as the run loop returns, so focus
+// work still pending from activateNativeApp does nothing.
+func endNativeActivation() {
+	C.dfw_end_activation()
 }
 
 // newNativeHiddenWindow, the describeNative helpers and
