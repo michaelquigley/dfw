@@ -15,3 +15,4 @@ examples/dfw-example-watch/web/dist
 examples/dfw-example-macos/dfw-example-macos
 examples/dfw-example-macos/dfw-example-macos.app
 examples/dfw-example-macos/fixture.log
+/.mega/environment.yaml
